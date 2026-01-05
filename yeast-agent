@@ -628,7 +628,7 @@ def reflect_on_output(output: str, self_model: Dict[str, Any]) -> Tuple[bool, Di
 
     # Weight by tension
     gates["coherence"]["score"] = tension.get("coherence", 0.9)
-    gates["consistency"]["score"] = tension.get("consistency", 0.85)
+    gates["contradiction"]["score"] = tension.get("consistency", 0.85)
 
     all_passed = all(g["passed"] for g in gates.values())
     return all_passed, gates
