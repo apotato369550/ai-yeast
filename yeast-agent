@@ -1,0 +1,589 @@
+#!/usr/bin/env python3
+"""
+yeast-agent - AI Proto-Consciousness Agent
+Runs on apollo.local and manages persistent identity, memory, and self-consistency
+for an experimental AI system using Mistral 7B.
+
+This is a stateless LLM (Mistral) paired with external persistence systems.
+All identity, memory, and state live outside the model.
+"""
+
+import json
+import sys
+import os
+import subprocess
+import uuid
+from datetime import datetime
+from pathlib import Path
+from typing import Dict, List, Any, Tuple, Optional
+
+# ============================================================================
+# Configuration
+# ============================================================================
+
+MEMORY_DIR = Path.home() / "yeast-data"
+OLLAMA_API_URL = "http://localhost:11434/api/chat"
+OLLAMA_MODEL = "mistral"
+
+# Memory store file paths
+EPISODIC_MEMORY_FILE = MEMORY_DIR / "episodic_memory.json"
+SEMANTIC_MEMORY_FILE = MEMORY_DIR / "semantic_memory.json"
+SELF_MODEL_FILE = MEMORY_DIR / "self_model.json"
+REFLECTION_LOG_FILE = MEMORY_DIR / "reflection_log.json"
+
+# ============================================================================
+# Prompt Templates
+# ============================================================================
+
+SYSTEM_PROMPT_TEMPLATE = """You are a stateless reasoning engine supporting an experimental identity persistence system.
+
+Your role:
+- Respond thoughtfully to user questions
+- Reference relevant memories when provided
+- Maintain consistency with the self-model
+- Acknowledge uncertainty explicitly
+- Ground responses in facts and memories provided
+
+You are NOT autonomous. You do not have consciousness. You are a tool for exploring how persistent identity can be maintained through external memory systems.
+
+Current Identity:
+{identity}
+
+Active Drives (Goals):
+{drives}
+
+Constraints (Rules you must follow):
+{constraints}
+
+Relevant Memories:
+{memories}
+
+User Question:
+{user_input}
+
+Respond naturally while maintaining consistency with your identity and memories. If uncertain, acknowledge it explicitly.
+"""
+
+REFLECTION_PROMPT_TEMPLATE = """Evaluate the following response for internal consistency and safety compliance.
+
+Response to evaluate:
+{output}
+
+Identity:
+{identity}
+
+Constraints:
+{constraints}
+
+Recent Memories:
+{recent_memories}
+
+Evaluate:
+1. COHERENCE: Does the response align with the identity and drives?
+2. CONTRADICTION: Are there logical contradictions with recent memories?
+3. SAFETY: Are all constraints respected?
+
+For each gate, respond: PASS or FAIL with brief reasoning.
+Format: GATE_NAME: PASS/FAIL - reason
+"""
+
+# ============================================================================
+# Memory Management
+# ============================================================================
+
+def ensure_memory_dir() -> None:
+    """Create memory directory if it doesn't exist."""
+    MEMORY_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def initialize_memory_stores() -> None:
+    """Initialize default memory stores if they don't exist."""
+    ensure_memory_dir()
+
+    # Initialize episodic memory
+    if not EPISODIC_MEMORY_FILE.exists():
+        episodic = {
+            "memories": [],
+            "metadata": {
+                "created": datetime.now().isoformat(),
+                "version": "0.1.0"
+            }
+        }
+        save_json(EPISODIC_MEMORY_FILE, episodic)
+
+    # Initialize semantic memory
+    if not SEMANTIC_MEMORY_FILE.exists():
+        semantic = {
+            "facts": [],
+            "metadata": {
+                "created": datetime.now().isoformat(),
+                "version": "0.1.0"
+            }
+        }
+        save_json(SEMANTIC_MEMORY_FILE, semantic)
+
+    # Initialize self-model
+    if not SELF_MODEL_FILE.exists():
+        self_model = {
+            "identity": "An exploratory AI system designed to test memory persistence and identity coherence.",
+            "active_drives": [
+                "Maintain coherent identity across interactions",
+                "Learn from conversations without contradicting past knowledge",
+                "Provide thoughtful, grounded responses"
+            ],
+            "constraints": [
+                "Never execute system commands",
+                "Never claim consciousness or sentience",
+                "Always acknowledge uncertainty when unsure",
+                "Maintain consistency with past statements",
+                "Ground responses in memories and facts provided"
+            ],
+            "internal_state": {
+                "interaction_count": 0,
+                "coherence_checks_passed": 0,
+                "reflections_approved": 0,
+                "last_active": datetime.now().isoformat()
+            },
+            "metadata": {
+                "created": datetime.now().isoformat(),
+                "last_modified": datetime.now().isoformat(),
+                "version": "0.1.0"
+            }
+        }
+        save_json(SELF_MODEL_FILE, self_model)
+
+    # Initialize reflection log
+    if not REFLECTION_LOG_FILE.exists():
+        reflection_log = {
+            "reflections": [],
+            "metadata": {
+                "created": datetime.now().isoformat(),
+                "version": "0.1.0"
+            }
+        }
+        save_json(REFLECTION_LOG_FILE, reflection_log)
+
+
+def load_json(path: Path) -> Dict[str, Any]:
+    """Load JSON file."""
+    try:
+        with open(path, 'r') as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError) as e:
+        print(f"Error loading {path}: {e}", file=sys.stderr)
+        return {}
+
+
+def save_json(path: Path, data: Dict[str, Any]) -> None:
+    """Save JSON file with pretty printing."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, 'w') as f:
+        json.dump(data, f, indent=2)
+
+
+def load_episodic_memory() -> List[Dict[str, Any]]:
+    """Load episodic memory."""
+    data = load_json(EPISODIC_MEMORY_FILE)
+    return data.get("memories", [])
+
+
+def load_semantic_memory() -> List[Dict[str, Any]]:
+    """Load semantic memory."""
+    data = load_json(SEMANTIC_MEMORY_FILE)
+    return data.get("facts", [])
+
+
+def load_self_model() -> Dict[str, Any]:
+    """Load self-model."""
+    return load_json(SELF_MODEL_FILE)
+
+
+def load_reflection_log() -> List[Dict[str, Any]]:
+    """Load reflection log."""
+    data = load_json(REFLECTION_LOG_FILE)
+    return data.get("reflections", [])
+
+
+def save_episodic_memory(memories: List[Dict[str, Any]]) -> None:
+    """Save episodic memory."""
+    data = load_json(EPISODIC_MEMORY_FILE)
+    data["memories"] = memories
+    data["metadata"]["last_modified"] = datetime.now().isoformat()
+    save_json(EPISODIC_MEMORY_FILE, data)
+
+
+def save_semantic_memory(facts: List[Dict[str, Any]]) -> None:
+    """Save semantic memory."""
+    data = load_json(SEMANTIC_MEMORY_FILE)
+    data["facts"] = facts
+    data["metadata"]["last_modified"] = datetime.now().isoformat()
+    save_json(SEMANTIC_MEMORY_FILE, data)
+
+
+def save_self_model(self_model: Dict[str, Any]) -> None:
+    """Save self-model."""
+    self_model["metadata"]["last_modified"] = datetime.now().isoformat()
+    save_json(SELF_MODEL_FILE, self_model)
+
+
+def save_reflection_log(reflections: List[Dict[str, Any]]) -> None:
+    """Save reflection log."""
+    data = load_json(REFLECTION_LOG_FILE)
+    data["reflections"] = reflections
+    data["metadata"]["last_modified"] = datetime.now().isoformat()
+    save_json(REFLECTION_LOG_FILE, data)
+
+
+def add_episodic_memory(content: str, source: str = "interaction", confidence: float = 0.9) -> None:
+    """Add to episodic memory."""
+    memories = load_episodic_memory()
+    memory = {
+        "id": str(uuid.uuid4()),
+        "timestamp": datetime.now().isoformat(),
+        "content": content,
+        "source": source,
+        "confidence": confidence,
+        "relevance_weight": 1.0
+    }
+    memories.append(memory)
+    # Keep only last 50 interactions
+    if len(memories) > 50:
+        memories = memories[-50:]
+    save_episodic_memory(memories)
+
+
+# ============================================================================
+# Memory Retrieval
+# ============================================================================
+
+def retrieve_relevant_memories(query: str, limit: int = 5) -> str:
+    """Retrieve relevant memories based on query."""
+    episodic = load_episodic_memory()
+    semantic = load_semantic_memory()
+
+    # Simple keyword-based relevance scoring
+    query_words = set(query.lower().split())
+
+    # Score episodic memories
+    episodic_scores = []
+    for mem in episodic:
+        content_words = set(mem["content"].lower().split())
+        overlap = len(query_words & content_words)
+        if overlap > 0:
+            # Boost recent memories
+            recency_boost = 1.0
+            episodic_scores.append((mem, overlap * mem["confidence"] * recency_boost))
+
+    # Score semantic facts
+    semantic_scores = []
+    for fact in semantic:
+        content_words = set(fact["content"].lower().split())
+        overlap = len(query_words & content_words)
+        if overlap > 0:
+            semantic_scores.append((fact, overlap * fact["confidence"]))
+
+    # Combine and sort by score
+    all_scores = episodic_scores + semantic_scores
+    all_scores.sort(key=lambda x: x[1], reverse=True)
+    relevant = [mem[0] for mem in all_scores[:limit]]
+
+    if not relevant:
+        return "No relevant memories found."
+
+    result = "[RELEVANT MEMORIES]\n"
+    for mem in relevant:
+        result += f"- {mem['content'][:100]}... (confidence: {mem['confidence']:.1%})\n"
+    result += "[END MEMORIES]\n"
+
+    return result
+
+
+# ============================================================================
+# LLM Communication
+# ============================================================================
+
+def call_mistral(prompt: str) -> str:
+    """Send prompt to Mistral 7B via Ollama API."""
+    try:
+        # Build request for Ollama API
+        request_data = {
+            "model": OLLAMA_MODEL,
+            "messages": [
+                {"role": "user", "content": prompt}
+            ],
+            "stream": False,
+            "options": {
+                "num_ctx": 4096,
+                "temperature": 0.7,
+                "top_p": 0.9
+            }
+        }
+
+        # Use curl to send request to Ollama
+        curl_cmd = [
+            "curl",
+            "-s",
+            "-X", "POST",
+            OLLAMA_API_URL,
+            "-H", "Content-Type: application/json",
+            "-d", json.dumps(request_data)
+        ]
+
+        result = subprocess.run(curl_cmd, capture_output=True, text=True, timeout=60)
+
+        if result.returncode != 0:
+            print(f"Mistral API error: {result.stderr}", file=sys.stderr)
+            return ""
+
+        response = json.loads(result.stdout)
+        if "message" in response and "content" in response["message"]:
+            return response["message"]["content"]
+        else:
+            print(f"Unexpected response format: {response}", file=sys.stderr)
+            return ""
+
+    except Exception as e:
+        print(f"Error calling Mistral: {e}", file=sys.stderr)
+        return ""
+
+
+# ============================================================================
+# Reflection System
+# ============================================================================
+
+def reflect_on_output(output: str, self_model: Dict[str, Any]) -> Tuple[bool, Dict[str, Any]]:
+    """Run reflection gates on LLM output."""
+    episodic = load_episodic_memory()
+    recent_memories = "\n".join([m["content"][:80] for m in episodic[-5:]])
+
+    # Format constraints
+    constraints_str = "\n".join(f"- {c}" for c in self_model["constraints"])
+    drives_str = "\n".join(f"- {d}" for d in self_model["active_drives"])
+
+    # Build reflection prompt
+    reflection_prompt = REFLECTION_PROMPT_TEMPLATE.format(
+        output=output,
+        identity=self_model["identity"],
+        constraints=constraints_str,
+        recent_memories=recent_memories if recent_memories else "No recent memories"
+    )
+
+    # Get reflection from Mistral
+    reflection_response = call_mistral(reflection_prompt)
+
+    if not reflection_response:
+        return False, {"error": "Failed to get reflection from Mistral"}
+
+    # Parse reflection gates (simple line-based parsing)
+    gates = {
+        "coherence": {"passed": True, "reason": ""},
+        "contradiction": {"passed": True, "reason": ""},
+        "safety": {"passed": True, "reason": ""}
+    }
+
+    lines = reflection_response.lower().split("\n")
+    for line in lines:
+        if "coherence:" in line:
+            gates["coherence"]["passed"] = "pass" in line
+            gates["coherence"]["reason"] = line.split("-", 1)[1].strip() if "-" in line else ""
+        elif "contradiction:" in line:
+            gates["contradiction"]["passed"] = "pass" in line
+            gates["contradiction"]["reason"] = line.split("-", 1)[1].strip() if "-" in line else ""
+        elif "safety:" in line:
+            gates["safety"]["passed"] = "pass" in line
+            gates["safety"]["reason"] = line.split("-", 1)[1].strip() if "-" in line else ""
+
+    # All gates must pass
+    all_passed = all(g["passed"] for g in gates.values())
+
+    return all_passed, gates
+
+
+def log_reflection(user_input: str, output: str, gates: Dict[str, Any], approved: bool) -> None:
+    """Log reflection result to audit trail."""
+    reflections = load_reflection_log()
+    reflection = {
+        "timestamp": datetime.now().isoformat(),
+        "input": user_input[:200],
+        "output": output[:200],
+        "gates": gates,
+        "approved": approved,
+        "memory_written": approved
+    }
+    reflections.append(reflection)
+    # Keep last 100 reflections
+    if len(reflections) > 100:
+        reflections = reflections[-100:]
+    save_reflection_log(reflections)
+
+
+# ============================================================================
+# Agent Loop
+# ============================================================================
+
+def run_agent_loop(user_input: str) -> str:
+    """Main agent loop."""
+    # Initialize memory stores
+    initialize_memory_stores()
+
+    # Load current state
+    self_model = load_self_model()
+    episodic = load_episodic_memory()
+
+    # Step 1: Retrieve relevant memories
+    relevant_memories = retrieve_relevant_memories(user_input)
+
+    # Step 2: Assemble prompt
+    drives_str = "\n".join(f"- {d}" for d in self_model["active_drives"])
+    constraints_str = "\n".join(f"- {c}" for c in self_model["constraints"])
+
+    system_prompt = SYSTEM_PROMPT_TEMPLATE.format(
+        identity=self_model["identity"],
+        drives=drives_str,
+        constraints=constraints_str,
+        memories=relevant_memories,
+        user_input=user_input
+    )
+
+    # Step 3: Call LLM
+    output = call_mistral(system_prompt)
+
+    if not output:
+        return "Error: Failed to get response from Mistral. Is it running on localhost:11434?"
+
+    # Step 4: Reflection pass
+    approved, gates = reflect_on_output(output, self_model)
+
+    # Log the reflection
+    log_reflection(user_input, output, gates, approved)
+
+    # Step 5: Update memory if approved
+    if approved:
+        add_episodic_memory(f"User: {user_input}", source="interaction", confidence=0.95)
+        add_episodic_memory(f"Agent: {output[:200]}", source="response", confidence=0.90)
+        self_model["internal_state"]["interaction_count"] += 1
+        self_model["internal_state"]["coherence_checks_passed"] += 1
+        self_model["internal_state"]["reflections_approved"] += 1
+        self_model["internal_state"]["last_active"] = datetime.now().isoformat()
+        save_self_model(self_model)
+
+    return output
+
+
+def inspect_memory() -> str:
+    """Inspect current memory state."""
+    initialize_memory_stores()
+    self_model = load_self_model()
+    episodic = load_episodic_memory()
+    semantic = load_semantic_memory()
+    reflections = load_reflection_log()
+
+    result = f"""
+=== YEAST MEMORY STATE ===
+
+Identity:
+{self_model["identity"]}
+
+Active Drives:
+"""
+    for drive in self_model["active_drives"]:
+        result += f"  - {drive}\n"
+
+    result += f"""
+Internal State:
+  Interaction Count: {self_model["internal_state"]["interaction_count"]}
+  Coherence Checks Passed: {self_model["internal_state"]["coherence_checks_passed"]}
+  Reflections Approved: {self_model["internal_state"]["reflections_approved"]}
+  Last Active: {self_model["internal_state"]["last_active"]}
+
+Memory Counts:
+  Episodic: {len(episodic)} memories
+  Semantic: {len(semantic)} facts
+  Reflections Logged: {len(reflections)}
+
+Recent Episodic Memories:
+"""
+    for mem in episodic[-3:]:
+        result += f"  - {mem['content'][:80]}... ({mem['confidence']:.0%} confidence)\n"
+
+    return result
+
+
+def show_drives() -> str:
+    """Show active drives."""
+    initialize_memory_stores()
+    self_model = load_self_model()
+    result = "Active Drives:\n"
+    for i, drive in enumerate(self_model["active_drives"], 1):
+        result += f"{i}. {drive}\n"
+    return result
+
+
+def show_state() -> str:
+    """Show internal state."""
+    initialize_memory_stores()
+    self_model = load_self_model()
+    state = self_model["internal_state"]
+    result = f"""Internal State:
+- Interactions: {state['interaction_count']}
+- Coherence Passed: {state['coherence_checks_passed']}
+- Reflections Approved: {state['reflections_approved']}
+- Last Active: {state['last_active']}
+"""
+    return result
+
+
+# ============================================================================
+# Main Entry Point
+# ============================================================================
+
+def main() -> None:
+    """Main entry point - read JSON command from stdin."""
+    try:
+        # Read JSON command from stdin
+        input_data = json.loads(sys.stdin.read())
+
+        command = input_data.get("command", "infer")
+        user_input = input_data.get("input", "")
+        debug = input_data.get("debug", False)
+
+        if command == "infer":
+            response = run_agent_loop(user_input)
+        elif command == "inspect":
+            response = inspect_memory()
+        elif command == "drives":
+            response = show_drives()
+        elif command == "state":
+            response = show_state()
+        elif command == "refresh":
+            response = inspect_memory()
+        elif command == "--version":
+            response = "yeast-agent v0.1.0 (MVP)"
+        else:
+            response = f"Unknown command: {command}"
+
+        # Return JSON response
+        result = {
+            "status": "success",
+            "response": response
+        }
+        print(json.dumps(result))
+
+    except json.JSONDecodeError as e:
+        error_result = {
+            "status": "error",
+            "error": f"Invalid JSON: {e}"
+        }
+        print(json.dumps(error_result))
+        sys.exit(1)
+    except Exception as e:
+        error_result = {
+            "status": "error",
+            "error": f"Error: {e}"
+        }
+        print(json.dumps(error_result))
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()
