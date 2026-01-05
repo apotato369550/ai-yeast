@@ -5,7 +5,120 @@ All notable changes to the Yeast AI Proto-Consciousness Framework are documented
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.1.0] - 2026-01-06
+## [0.2.0] - 2026-01-06 (Branch: phase-2-memory-depth)
+
+### Added (Phase 2: Memory Depth, Time, and Pressure)
+
+**Memory Decay System**
+- Exponential time-based decay with 14-day half-life
+- Memory strength: 1.0 at creation, 0.5 at 14 days, approaches 0 over time
+- Relevance weight combines decay with confidence
+- Decayed view separate from raw episodic storage
+- Retrieval prioritizes recent, high-confidence memories
+
+**Memory Consolidation (Core Feature)**
+- Manual consolidation command: `yeast consolidate`
+- Selects aged episodic memories (decay < 60%)
+- Queries Mistral: "What patterns persist?"
+- Generates semantic facts from consolidation patterns
+- Deletes consolidated episodic items
+- Logs every forgetting event with summary and reason
+
+**Observable Forgetting**
+- Forgetting log (reflection/forgetting.json)
+- Every deletion tracked with timestamp, content summary, reason
+- Enables interrogation: "What did you forget?"
+- Bias detection: Which memory types survive consolidation?
+
+**Identity Versioning and Drift Detection**
+- Self-model history: Append-only snapshot trail
+- Drift audit command: `yeast audit`
+- Compares current identity with previous versions
+- Detects: core identity drift, constraint erosion, confidence changes
+- Reports severity (0.0-1.0) and specific shifts
+- Flags identity instability before it becomes problematic
+
+**Internal Tension (Evaluative Weights)**
+- Non-actionable internal metrics
+- Fields: coherence, consistency, novelty_tolerance, compression_pressure
+- Used in reflection gate scoring (affects stringency)
+- Displayed in `/inspect` and system prompts
+- Does NOT produce behavior or goals
+
+**Enhanced Memory Structure**
+- Tiered episodic: episodic/raw.json + episodic/decayed.json
+- Tiered semantic: semantic/distilled.json
+- Tiered self-model: self_model/current.json + self_model/history.json
+- Tiered reflection: audits.json + forgetting.json (new)
+- Enables observation of memory dynamics
+
+**New Commands**
+- Interactive: `/consolidate` - Run consolidation pass
+- Interactive: `/audit` - Check identity drift
+- CLI: `yeast consolidate` - Compress episodic memory
+- CLI: `yeast audit` - Detect identity drift
+- Enhanced `/inspect` - Shows decay %, forgetting events, consolidations
+
+**Reflection System Enhancement**
+- Reflection gates now weighted by internal tension
+- Coherence scoring uses coherence tension
+- Consistency scoring uses consistency tension
+- Still requires all 3 gates to pass (binary decision)
+
+**Test Evaluation Framework**
+- Evaluation questions clearly defined in PHASE-2.md
+- Metrics for measuring conciseness, mistake recurrence, identity stability
+- Stress test protocols included
+- Failure mode prediction framework
+
+### Changed
+
+**Memory Stores**
+- Episodic now split into raw and decayed views
+- Self-model now tracks version history
+- Reflection audits separated from forgetting log
+- Max episodic kept at 50 (with decay-based priority)
+- Max semantic facts: 100 (consolidated from episodic)
+- Max reflection audits: 100 (separate from forgetting)
+
+**Agent Loop**
+- Memory retrieval uses decayed relevance
+- Reflection gates weighted by internal tension
+- Memory updates log both episodic and consolidation events
+
+**CLI Output**
+- `/inspect` now shows extensive memory inventory
+- Shows decay percentages for episodic memories
+- Shows forgetting events with reasons
+- Shows consolidation count and forgotten count
+- Shows identity snapshot count
+
+**Documentation**
+- Added PHASE-2.md with comprehensive feature guide
+- Updated CLAUDE.md with Phase 2 status
+- Updated yeast --help with Phase 2 commands
+- Updated yeast interactive help with consolidate/audit
+
+### Not Changed (Still No Autonomy)
+
+🚫 No background loops (consolidation is manual)
+🚫 No self-initiation (all commands explicit)
+🚫 No goal pursuit (tension is non-actionable)
+🚫 No self-modification (drives/constraints immutable)
+🚫 No persistence pressure (no "survival instinct" framing)
+🚫 No agency (still advisory-only reasoning)
+
+### Testing Recommended
+
+Before Phase 3, verify:
+1. Memory decay works: `/inspect` shows decay percentages
+2. Consolidation compresses: episodic shrinks, semantic grows
+3. Forgetting is observable: `/inspect` shows forgetting log
+4. Identity drift detection: `yeast audit` detects changes (or not)
+5. Reflection gates still work: Incoherent outputs still filtered
+6. Tension weights affect gates: Review gate scores in audits.json
+
+## [0.1.0] - 2026-01-06 (Branch: master)
 
 ### Added (Initial MVP Release)
 

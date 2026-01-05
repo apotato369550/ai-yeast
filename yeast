@@ -72,21 +72,26 @@ ${BLUE}Examples:${NC}
   yeast -p "Tell me about recent interactions"
   yeast --setup            # First time setup
 
-${BLUE}Interactive Commands:${NC}
-  /help      - Show available commands
-  /clear     - Clear conversation history
-  /inspect   - View current memory state
-  /drives    - Show active drives
-  /state     - Show internal state
-  /refresh   - Refresh system memory
-  /exit      - Exit interactive mode
+${BLUE}Interactive Commands (Phase 2):${NC}
+  /help       - Show available commands
+  /clear      - Clear conversation history (local only)
+  /inspect    - View memory state (decay, forgetting log, consolidations)
+  /consolidate - Run consolidation pass (episodic → semantic compression)
+  /audit      - Detect identity drift across versions
+  /drives     - Show active drives
+  /state      - Show internal state (interactions, consolidations, forgotten)
+  /exit       - Exit interactive mode
+
+${BLUE}Management Commands:${NC}
+  yeast consolidate        # Compress old episodic memories into semantic facts
+  yeast audit              # Check for identity drift (requires 2+ versions)
 
 ${BLUE}About:${NC}
   yeast is an experimental framework for exploring persistent identity,
-  memory, and self-consistency in AI systems using a local LLM (Mistral 7B).
+  memory depth, and time asymmetry in AI systems using Mistral 7B.
 
-  The system is stateless (the LLM) but maintains all persistence, identity,
-  and memory externally. This is a research tool, not a consciousness claim.
+  Phase 2 introduces: time-based decay (14-day half-life), memory consolidation,
+  explicit forgetting log, and identity drift detection. No autonomy yet.
 
 EOF
 }
@@ -245,14 +250,15 @@ handle_slash_command() {
       ;;
     /help)
       echo ""
-      echo -e "${CYAN}Available Commands:${NC}"
-      echo "  /help      - Show this help message"
-      echo "  /clear     - Clear conversation history (local only)"
-      echo "  /inspect   - View current memory stores on apollo"
-      echo "  /drives    - Show active drives from self-model"
-      echo "  /state     - Show internal state"
-      echo "  /refresh   - Refresh memory stores"
-      echo "  /exit      - Exit interactive mode"
+      echo -e "${CYAN}Available Commands (Phase 2):${NC}"
+      echo "  /help       - Show this help message"
+      echo "  /clear      - Clear conversation history (local only)"
+      echo "  /inspect    - View memory state (with decay and forgetting)"
+      echo "  /consolidate - Run memory consolidation pass"
+      echo "  /audit      - Check for identity drift"
+      echo "  /drives     - Show active drives from self-model"
+      echo "  /state      - Show internal state (interactions, consolidations)"
+      echo "  /exit       - Exit interactive mode"
       echo ""
       return 0
       ;;
@@ -266,6 +272,16 @@ handle_slash_command() {
       send_to_agent "" "inspect"
       return 0
       ;;
+    /consolidate)
+      log_info "Running memory consolidation (may take 30-60 seconds)..."
+      send_to_agent "" "consolidate"
+      return 0
+      ;;
+    /audit)
+      log_info "Auditing identity drift..."
+      send_to_agent "" "audit"
+      return 0
+      ;;
     /drives)
       log_info "Retrieving active drives..."
       send_to_agent "Show my active drives" "drives"
@@ -274,11 +290,6 @@ handle_slash_command() {
     /state)
       log_info "Retrieving internal state..."
       send_to_agent "Show my internal state" "state"
-      return 0
-      ;;
-    /refresh)
-      log_info "Refreshing memory stores..."
-      send_to_agent "Refresh memory" "refresh"
       return 0
       ;;
     *)
@@ -474,6 +485,31 @@ main() {
     fi
     headless_mode "$question"
   else
+    # Check if user wants to run a management command
+    if [ "$question" = "consolidate" ]; then
+      check_env
+      load_env
+      test_ssh_connection
+      test_agent_availability
+      echo ""
+      log_info "Running memory consolidation (may take 30-60 seconds)..."
+      echo ""
+      send_to_agent "" "consolidate"
+      echo ""
+      exit 0
+    elif [ "$question" = "audit" ]; then
+      check_env
+      load_env
+      test_ssh_connection
+      test_agent_availability
+      echo ""
+      log_info "Auditing identity drift..."
+      echo ""
+      send_to_agent "" "audit"
+      echo ""
+      exit 0
+    fi
+
     # Interactive mode
     check_env
     load_env
