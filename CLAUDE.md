@@ -4,9 +4,35 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Implementation Status
 
-### Phase 1 (MVP v0.1.0) - COMPLETE ✓
+### Phase 2 (Memory Depth v0.2.0) - COMPLETE ✓ (Branch: phase-2-memory-depth)
 
-The MVP has been implemented and is ready for testing. All core components are functional:
+Phase 2 adds temporal structure and explicit forgetting without introducing autonomy:
+
+**New Phase 2 Features**:
+- ✓ Time-based memory decay (exponential, 14-day half-life)
+- ✓ Manual consolidation command (episodic → semantic compression)
+- ✓ Observable forgetting log (deletion audit trail)
+- ✓ Identity drift detection (version history + comparison)
+- ✓ Internal tension weights (non-actionable evaluative metrics)
+- ✓ Memory structure tiers (raw/decayed, current/history)
+- ✓ Enhanced /inspect command (shows decay, forgetting, consolidations)
+- ✓ New management commands (consolidate, audit)
+
+**Phase 2 Files**:
+- `yeast-agent` - 787 lines (expanded from 616)
+- `yeast` - Enhanced with consolidate/audit support
+- `PHASE-2.md` - Comprehensive Phase 2 documentation
+- Updated CLAUDE.md, CHANGELOG.md
+
+**Testing Phase 2**:
+- Deploy from branch: `git checkout phase-2-memory-depth`
+- Run consolidation: `yeast consolidate`
+- Check drift: `yeast audit`
+- View memory: `yeast -p "/inspect"` (shows decay%)
+
+### Phase 1 (MVP v0.1.0) - COMPLETE ✓ (Branch: master)
+
+The initial MVP is implemented and proven functional. All core components are operational:
 
 **Delivered**:
 - ✓ Local CLI wrapper (`yeast` bash script)
