@@ -75,6 +75,7 @@ ${BLUE}Examples:${NC}
 ${BLUE}Interactive Commands (Phase 2):${NC}
   /help       - Show available commands
   /clear      - Clear conversation history (local only)
+  /dialogue   - View complete dialogue history (all interactions logged)
   /inspect    - View memory state (decay, forgetting log, consolidations)
   /consolidate - Run consolidation pass (episodic → semantic compression)
   /audit      - Detect identity drift across versions
@@ -253,6 +254,7 @@ handle_slash_command() {
       echo -e "${CYAN}Available Commands (Phase 2):${NC}"
       echo "  /help       - Show this help message"
       echo "  /clear      - Clear conversation history (local only)"
+      echo "  /dialogue   - View complete dialogue history (all turns logged)"
       echo "  /inspect    - View memory state (with decay and forgetting)"
       echo "  /consolidate - Run memory consolidation pass"
       echo "  /audit      - Check for identity drift"
@@ -290,6 +292,11 @@ handle_slash_command() {
     /state)
       log_info "Retrieving internal state..."
       send_to_agent "Show my internal state" "state"
+      return 0
+      ;;
+    /dialogue)
+      log_info "Retrieving dialogue history..."
+      send_to_agent "" "dialogue"
       return 0
       ;;
     *)

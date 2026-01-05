@@ -12,21 +12,26 @@ This guide walks you through testing Phase 2 features step-by-step.
 # 1. Switch to Phase 2 branch
 git checkout phase-2-memory-depth
 
-# 2. Deploy to apollo
+# 2. Deploy to apollo (updates agent, preserves existing data)
 scp yeast-agent apollo.local:~/yeast-agent
 ssh apollo.local "chmod +x ~/yeast-agent"
 
-# 3. Clear old data (start fresh)
-ssh apollo.local "rm -rf ~/yeast-data"
+# NOTE: We do NOT delete ~/yeast-data. Phase 1 interactions are preserved!
 
-# 4. Test basic interaction
+# 3. Test basic interaction
 ./yeast -p "Hello, who are you?"
+
+# 4. View dialogue history (all interactions logged independently)
+./yeast -p "/dialogue"
 
 # 5. Inspect memory
 ./yeast -p "/inspect"
 ```
 
-Expected output: Response from Yeast, then memory state showing 2 episodic memories (user + agent).
+Expected output:
+- Response from Yeast
+- Dialogue history shows all turns (including any Phase 1 interactions)
+- Memory state showing episodic memories with decay info
 
 ---
 
@@ -39,16 +44,26 @@ Expected output: Response from Yeast, then memory state showing 2 episodic memor
 git checkout phase-2-memory-depth
 
 # Verify files are present
-ls -la yeast yeast-agent PHASE-2.md plans/
+ls -la yeast yeast-agent PHASE-2.md plans/ TESTING.md
 
-# Deploy
+# OPTIONAL: Backup existing data (if you have Phase 1 interactions to preserve)
+ssh apollo.local "cp -r ~/yeast-data ~/yeast-data.backup-before-phase2"
+
+# Deploy updated agent (preserves data!)
 scp yeast-agent apollo.local:~/yeast-agent
-ssh apollo.local "chmod +x ~/yeast-agent && rm -rf ~/yeast-data"
+ssh apollo.local "chmod +x ~/yeast-agent"
 
 # Verify connection
 ./yeast -p "Test"
 # Should respond with a message
+
+# Verify dialogue logging is working
+./yeast -p "/dialogue"
+# Should show dialogue history including the "Test" interaction above
 ```
+
+**Important**: We do NOT delete ~/yeast-data. All Phase 1 interactions are preserved and logged.
+If you want a clean slate, manually reset: `ssh apollo.local "rm -rf ~/yeast-data"` (not recommended)
 
 ---
 
@@ -69,9 +84,64 @@ EOF
 ./yeast -p "Remember: The user's name is Jay"
 ./yeast -p "What did I just tell you?"
 # Should reference the previous interaction
+
+# Verify all interactions are logged in dialogue history
+./yeast -p "/dialogue"
+# Should show all turns, including any Phase 1 interactions
 ```
 
-**Expected**: Responses make sense, memory is retrievable
+**Expected**: Responses make sense, memory is retrievable, dialogue history contains all turns
+
+---
+
+### Phase 1.5: Dialogue Logging Testing
+
+```bash
+# Verify dialogue.json was created
+ssh apollo.local "test -f ~/yeast-data/dialogue.json && echo 'Dialogue log exists' || echo 'Missing!'"
+
+# View dialogue log structure
+ssh apollo.local "python3 -m json.tool ~/yeast-data/dialogue.json | head -30"
+
+# Expected structure:
+# {
+#   "dialogues": [
+#     {
+#       "turn": 1,
+#       "timestamp": "2026-01-06T...",
+#       "user_input": "What is your identity?",
+#       "agent_response": "I am an exploratory AI...",
+#       "reflection_approved": true,
+#       "memory_stored": true
+#     },
+#     ...
+#   ],
+#   "metadata": {
+#     "created": "2026-01-06T...",
+#     "last_updated": "2026-01-06T...",
+#     "total_turns": 5
+#   }
+# }
+
+# View dialogue via CLI
+./yeast -p "/dialogue"
+# Should show last 10 turns with timestamps
+
+# Count total interactions
+ssh apollo.local "python3 -c \"import json; data=json.load(open('/home/$USER/yeast-data/dialogue.json')); print(f'Total turns: {data[\\\"metadata\\\"][\\\"total_turns\\\"]}')\""
+```
+
+**Expected**:
+- dialogue.json exists and contains all interactions
+- Each turn has user input, agent response, timestamps
+- /dialogue command shows recent turns
+- Count matches number of interactions you ran
+- Includes any Phase 1 interactions if they existed
+
+**Key Insight**: Dialogue log is INDEPENDENT from memory system.
+- If reflection_approved is false, response is NOT stored in episodic memory
+- But it IS still logged in dialogue.json
+- This creates a complete audit trail
 
 ---
 
@@ -404,6 +474,9 @@ done
 ### View Raw Memory Files
 
 ```bash
+# Dialogue log (ALL interactions, independent from memory)
+ssh apollo.local "python3 -m json.tool ~/yeast-data/dialogue.json | head -50"
+
 # Episodic raw (unchanged)
 ssh apollo.local "python3 -m json.tool ~/yeast-data/episodic/raw.json | head -50"
 
@@ -425,6 +498,11 @@ ssh apollo.local "python3 -m json.tool ~/yeast-data/reflection/audits.json | tai
 # Forgetting log
 ssh apollo.local "python3 -m json.tool ~/yeast-data/reflection/forgetting.json"
 ```
+
+**Three-Tier Logging System**:
+1. **dialogue.json** - Complete audit trail (user input → agent response + whether approved)
+2. **episodic_memory.json** - What the system remembers (only if reflection approved)
+3. **reflection_audits.json** - Why reflection approved/rejected each output
 
 ---
 
@@ -465,14 +543,29 @@ ssh apollo.local "python3 -m json.tool ~/yeast-data/reflection/forgetting.json"
 
 ### Phase 2 MVP Tests Pass When:
 
+**Dialogue Logging**:
+- ✅ dialogue.json created automatically
+- ✅ Every interaction logged (user input + agent response)
+- ✅ Timestamps present on all entries
+- ✅ /dialogue command shows last 10 turns
+- ✅ Phase 1 interactions still present (not erased by Phase 2)
+
+**Memory & Decay**:
 - ✅ Memory decay is calculated (100% at creation, ~50% at 14 days)
 - ✅ Consolidation compresses episodic → semantic (episodic shrinks, semantic grows)
 - ✅ Forgetting is logged (every deleted memory appears in forgetting.json)
+
+**Identity & Drift**:
 - ✅ Drift detection runs (after 2+ consolidations, audit produces report)
 - ✅ Identity remains stable (drift severity < 0.2 if no changes made)
+
+**Reflection & Safety**:
 - ✅ Reflection gates still work (incoherent outputs are filtered)
-- ✅ No memory corruption (all interactions retrievable, no data loss)
 - ✅ Tension weights visible (appear in `/inspect` output)
+
+**Data Integrity**:
+- ✅ No memory corruption (all interactions retrievable, no data loss)
+- ✅ Three-tier logging system working (dialogue → reflection → memory)
 
 ---
 

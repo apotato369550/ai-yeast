@@ -46,6 +46,7 @@ SELF_MODEL_CURRENT_FILE = SELF_MODEL_DIR / "current.json"
 SELF_MODEL_HISTORY_FILE = SELF_MODEL_DIR / "history.json"
 REFLECTION_AUDIT_FILE = REFLECTION_DIR / "audits.json"
 FORGETTING_LOG_FILE = REFLECTION_DIR / "forgetting.json"
+DIALOGUE_LOG_FILE = MEMORY_DIR / "dialogue.json"
 
 # Constants
 MEMORY_DECAY_HALF_LIFE_DAYS = 14  # Episodic memories decay to 50% in 14 days
@@ -362,6 +363,33 @@ def add_to_forgetting_log(memory_id: str, content: str, reason: str) -> None:
     save_json(FORGETTING_LOG_FILE, log_data)
 
 
+def log_dialogue(user_input: str, agent_response: str, reflection_approved: bool) -> None:
+    """Log complete dialogue exchange (independent from memory system)."""
+    log_data = load_json(DIALOGUE_LOG_FILE)
+    if "dialogues" not in log_data:
+        log_data["dialogues"] = []
+
+    dialogue_entry = {
+        "turn": len(log_data["dialogues"]) + 1,
+        "timestamp": datetime.now().isoformat(),
+        "user_input": user_input,
+        "agent_response": agent_response,
+        "reflection_approved": reflection_approved,
+        "memory_stored": reflection_approved
+    }
+    log_data["dialogues"].append(dialogue_entry)
+
+    if "metadata" not in log_data:
+        log_data["metadata"] = {
+            "created": datetime.now().isoformat(),
+            "version": "0.2.0"
+        }
+    log_data["metadata"]["last_updated"] = datetime.now().isoformat()
+    log_data["metadata"]["total_turns"] = len(log_data["dialogues"])
+
+    save_json(DIALOGUE_LOG_FILE, log_data)
+
+
 # ============================================================================
 # Memory Retrieval (Phase 2)
 # ============================================================================
@@ -657,6 +685,9 @@ def run_agent_loop(user_input: str) -> str:
     approved, gates = reflect_on_output(output, self_model)
     log_reflection(user_input, output, gates, approved)
 
+    # ALWAYS log dialogue (independent of memory approval)
+    log_dialogue(user_input, output, approved)
+
     if approved:
         # Add to raw episodic memory
         raw = load_episodic_raw()
@@ -769,6 +800,18 @@ def main() -> None:
             self_model = load_self_model_current()
             state = self_model["internal_state"]
             response = f"Internal State:\n- Interactions: {state['interaction_count']}\n- Consolidations: {state['consolidation_count']}\n- Forgotten: {state['memories_forgotten']}"
+        elif command == "dialogue":
+            dialogue_data = load_json(DIALOGUE_LOG_FILE)
+            dialogues = dialogue_data.get("dialogues", [])
+            if not dialogues:
+                response = "No dialogue history yet."
+            else:
+                response = f"=== Dialogue History ({len(dialogues)} turns) ===\n\n"
+                for d in dialogues[-10:]:  # Show last 10
+                    response += f"Turn {d['turn']} [{d['timestamp']}]\n"
+                    response += f"User: {d['user_input'][:100]}\n"
+                    response += f"Agent: {d['agent_response'][:100]}...\n"
+                    response += f"Memory stored: {d['memory_stored']}\n\n"
         elif command == "--version":
             response = "yeast-agent v0.2.0 (Phase 2: Memory Depth)"
         else:
