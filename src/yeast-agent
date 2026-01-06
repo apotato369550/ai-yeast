@@ -49,7 +49,7 @@ FORGETTING_LOG_FILE = REFLECTION_DIR / "forgetting.json"
 DIALOGUE_LOG_FILE = MEMORY_DIR / "dialogue.json"
 
 # Constants
-MEMORY_DECAY_HALF_LIFE_DAYS = 14  # Episodic memories decay to 50% in 14 days
+MEMORY_DECAY_HALF_LIFE_DAYS = 2  # Episodic memories decay to 50% in 2 days (48 hours)
 MAX_EPISODIC_MEMORIES = 50
 MAX_SEMANTIC_FACTS = 100
 MAX_REFLECTION_AUDITS = 100
