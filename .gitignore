@@ -43,3 +43,6 @@ Thumbs.db
 
 # Project-specific
 *.log
+data/downloads/        # Memory downloads from apollo
+.archives/yeast-backup* # Old backups
+.claude/               # Claude workspace cache
