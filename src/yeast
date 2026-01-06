@@ -35,6 +35,7 @@ MENU_ITEMS=(
     "💾 Download all memories"
     "🔍 Inspect memories"
     "📋 View recent interactions"
+    "⚙️  Adjust internal tension"
     "🚪 Exit"
 )
 
@@ -617,6 +618,59 @@ view_recent_interactions() {
 
   log_info "Retrieving recent interactions..."
   send_to_agent "" "dialogue"
+}
+
+# Adjust internal tension
+adjust_tension() {
+  check_env
+  load_env
+  test_ssh_connection
+
+  echo ""
+  echo -e "${CYAN}Adjust Internal Tension${NC}"
+  echo "Current available keys: coherence, consistency, novelty_tolerance, compression_pressure"
+  echo ""
+  
+  echo -n "Enter tension key: "
+  read -r key
+  
+  echo -n "Enter new value (0.0 - 1.0): "
+  read -r value
+
+  if [ -z "$key" ] || [ -z "$value" ]; then
+    log_error "Key and value are required."
+    return 1
+  fi
+
+  # Construct JSON manually for this special command
+  local json_request
+  read -r -d '' json_request <<EOF || true
+{
+  "command": "update_tension",
+  "key": "$key",
+  "value": $value
+}
+EOF
+
+  log_info "Sending update request..."
+  
+  local response
+  response=$(printf "%s" "$json_request" | timeout 30 ssh -p "$APOLLO_PORT" "$APOLLO_USER@$APOLLO_HOST" \
+    "python3 $AGENT_PATH" 2>&1)
+
+  # Parse response
+  local message
+  if echo "$response" | grep -q '"response"'; then
+     # Use python to extract response string safely
+     message=$(echo "$response" | python3 -c "import sys, json; print(json.load(sys.stdin).get('response', ''))" 2>/dev/null)
+     log_success "$message"
+  else
+     log_error "Update failed: $response"
+  fi
+  
+  echo ""
+  echo "Press any key to continue..."
+  read -rsn1 _ 2>/dev/null || true
 }
 
 # Headless (one-shot) mode
