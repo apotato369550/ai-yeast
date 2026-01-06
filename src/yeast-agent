@@ -1,17 +1,13 @@
 #!/usr/bin/env python3
 """
-yeast-agent v0.2.0 - AI Proto-Consciousness Agent (Phase 2: Memory Depth & Time)
+yeast-agent v0.3.0 - AI Proto-Consciousness Agent (Phase 3: Soft Autonomy)
 
-Phase 2 adds:
-- Memory tiers with semantic compression
-- Time-based decay and consolidation
-- Observable forgetting (deletion log)
-- Identity drift detection
-- Controlled internal tension (non-actionable weights)
-- Memory embeddings for semantic pressure
+Phase 3 adds:
+- Self-modification proposals (Semantic, Tension, Maintenance)
+- Proposal queue and logging
+- "Soft Autonomy" without direct execution
 
 All persistence lives outside the stateless LLM.
-Memory growth is shaped by explicit pressure, not accident.
 """
 
 import json
@@ -19,20 +15,21 @@ import sys
 import os
 import subprocess
 import uuid
+import re
 import math
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, List, Any, Tuple, Optional
 
-# ============================================================================
+# ============================================================================ 
 # Configuration
-# ============================================================================
+# ============================================================================ 
 
 MEMORY_DIR = Path.home() / "yeast-data"
 OLLAMA_API_URL = "http://localhost:11434/api/chat"
 OLLAMA_MODEL = "mistral"
 
-# Memory store structure (Phase 2)
+# Memory store structure
 EPISODIC_DIR = MEMORY_DIR / "episodic"
 SEMANTIC_DIR = MEMORY_DIR / "semantic"
 SELF_MODEL_DIR = MEMORY_DIR / "self_model"
@@ -47,16 +44,34 @@ SELF_MODEL_HISTORY_FILE = SELF_MODEL_DIR / "history.json"
 REFLECTION_AUDIT_FILE = REFLECTION_DIR / "audits.json"
 FORGETTING_LOG_FILE = REFLECTION_DIR / "forgetting.json"
 DIALOGUE_LOG_FILE = MEMORY_DIR / "dialogue.json"
+PROPOSALS_FILE = REFLECTION_DIR / "proposals.json"
 
 # Constants
 MEMORY_DECAY_HALF_LIFE_DAYS = 2  # Episodic memories decay to 50% in 2 days (48 hours)
 MAX_EPISODIC_MEMORIES = 50
 MAX_SEMANTIC_FACTS = 100
 MAX_REFLECTION_AUDITS = 100
+MAX_PENDING_PROPOSALS = 20
 
-# ============================================================================
+# ============================================================================ 
 # Prompt Templates
-# ============================================================================
+# ============================================================================ 
+
+PROPOSAL_TEMPLATE = """
+If you need to update your internal state (correct a fact, adjust tension, or request maintenance), append a JSON proposal block to the END of your response.
+
+Format:
+```json
+{
+  "proposal": {
+    "type": "semantic_refinement" | "tension_adjustment" | "consolidation_request",
+    "reason": "explanation...",
+    "action": { ...details... }
+  }
+}
+```
+DO NOT execute the change. ONLY propose it.
+"""
 
 SYSTEM_PROMPT_TEMPLATE = """You are a stateless reasoning engine supporting an experimental identity persistence system.
 
@@ -88,7 +103,8 @@ User Question:
 {user_input}
 
 Respond naturally while maintaining consistency with your identity and memories. If uncertain, acknowledge it explicitly.
-"""
+
+""" + PROPOSAL_TEMPLATE
 
 CONSOLIDATION_PROMPT_TEMPLATE = """You are analyzing memory compression. Given these episodic memories, extract what persists:
 
@@ -109,8 +125,7 @@ Return as JSON:
   "revisions": [
     {{"previous": "...", "revised": "...", "reason": "..."}}
   ]
-}}
-"""
+}} """
 
 DRIFT_AUDIT_PROMPT_TEMPLATE = """You are auditing identity consistency. Compare these versions:
 
@@ -131,15 +146,14 @@ Return:
   "severity": 0.0-1.0,
   "shifts": ["shift1", "shift2"],
   "explanation": "..."
-}}
-"""
+}} """
 
-# ============================================================================
+# ============================================================================ 
 # Memory Management v2
-# ============================================================================
+# ============================================================================ 
 
 def ensure_memory_structure() -> None:
-    """Create Phase 2 memory directory structure."""
+    """Create Phase 2/3 memory directory structure."""
     for d in [EPISODIC_DIR, SEMANTIC_DIR, SELF_MODEL_DIR, REFLECTION_DIR]:
         d.mkdir(parents=True, exist_ok=True)
 
@@ -161,27 +175,27 @@ def save_json(path: Path, data: Dict[str, Any]) -> None:
 
 
 def initialize_memory_stores() -> None:
-    """Initialize Phase 2 memory stores."""
+    """Initialize Phase 2/3 memory stores."""
     ensure_memory_structure()
 
     # Episodic: raw and decayed views
     if not EPISODIC_RAW_FILE.exists():
         save_json(EPISODIC_RAW_FILE, {
             "memories": [],
-            "metadata": {"created": datetime.now().isoformat(), "version": "0.2.0"}
+            "metadata": {{"created": datetime.now().isoformat(), "version": "0.3.0"}}
         })
 
     if not EPISODIC_DECAYED_FILE.exists():
         save_json(EPISODIC_DECAYED_FILE, {
             "memories": [],
-            "metadata": {"created": datetime.now().isoformat(), "version": "0.2.0"}
+            "metadata": {{"created": datetime.now().isoformat(), "version": "0.3.0"}}
         })
 
     # Semantic: distilled facts
     if not SEMANTIC_DISTILLED_FILE.exists():
         save_json(SEMANTIC_DISTILLED_FILE, {
             "facts": [],
-            "metadata": {"created": datetime.now().isoformat(), "version": "0.2.0"}
+            "metadata": {{"created": datetime.now().isoformat(), "version": "0.3.0"}}
         })
 
     # Self-model: current + history
@@ -224,26 +238,33 @@ def initialize_memory_stores() -> None:
     if not SELF_MODEL_HISTORY_FILE.exists():
         save_json(SELF_MODEL_HISTORY_FILE, {
             "snapshots": [],
-            "metadata": {"created": datetime.now().isoformat(), "version": "0.2.0"}
+            "metadata": {{"created": datetime.now().isoformat(), "version": "0.3.0"}}
         })
 
     # Reflection
     if not REFLECTION_AUDIT_FILE.exists():
         save_json(REFLECTION_AUDIT_FILE, {
             "audits": [],
-            "metadata": {"created": datetime.now().isoformat(), "version": "0.2.0"}
+            "metadata": {{"created": datetime.now().isoformat(), "version": "0.3.0"}}
         })
 
     if not FORGETTING_LOG_FILE.exists():
         save_json(FORGETTING_LOG_FILE, {
             "forgetting_events": [],
-            "metadata": {"created": datetime.now().isoformat(), "version": "0.2.0"}
+            "metadata": {{"created": datetime.now().isoformat(), "version": "0.3.0"}}
+        })
+
+    # Proposals (Phase 3)
+    if not PROPOSALS_FILE.exists():
+        save_json(PROPOSALS_FILE, {
+            "pending_proposals": [],
+            "metadata": {{"created": datetime.now().isoformat(), "version": "0.3.0"}}
         })
 
 
-# ============================================================================
+# ============================================================================ 
 # Time and Decay
-# ============================================================================
+# ============================================================================ 
 
 def calculate_decay(created_at: str, half_life_days: float = MEMORY_DECAY_HALF_LIFE_DAYS) -> float:
     """
@@ -252,7 +273,7 @@ def calculate_decay(created_at: str, half_life_days: float = MEMORY_DECAY_HALF_L
     """
     try:
         created = datetime.fromisoformat(created_at)
-        age_days = (datetime.now() - created).days
+        age_days = (datetime.now() - created).total_seconds() / 86400.0
         if age_days < 0:
             return 1.0
         decay_factor = 0.5 ** (age_days / half_life_days)
@@ -272,7 +293,7 @@ def apply_decay_to_episodic() -> None:
 
     decayed_data = {
         "memories": memories,
-        "metadata": {"last_decayed": datetime.now().isoformat(), "version": "0.2.0"}
+        "metadata": {{"last_decayed": datetime.now().isoformat(), "version": "0.3.0"}}
     }
     save_json(EPISODIC_DECAYED_FILE, decayed_data)
 
@@ -382,7 +403,7 @@ def log_dialogue(user_input: str, agent_response: str, reflection_approved: bool
     if "metadata" not in log_data:
         log_data["metadata"] = {
             "created": datetime.now().isoformat(),
-            "version": "0.2.0"
+            "version": "0.3.0"
         }
     log_data["metadata"]["last_updated"] = datetime.now().isoformat()
     log_data["metadata"]["total_turns"] = len(log_data["dialogues"])
@@ -390,9 +411,9 @@ def log_dialogue(user_input: str, agent_response: str, reflection_approved: bool
     save_json(DIALOGUE_LOG_FILE, log_data)
 
 
-# ============================================================================
+# ============================================================================ 
 # Memory Retrieval (Phase 2)
-# ============================================================================
+# ============================================================================ 
 
 def retrieve_relevant_memories(query: str, limit: int = 5) -> str:
     """Retrieve memories using decayed relevance scoring."""
@@ -435,9 +456,9 @@ def retrieve_relevant_memories(query: str, limit: int = 5) -> str:
     return result
 
 
-# ============================================================================
+# ============================================================================ 
 # Consolidation (Phase 2 Core Feature)
-# ============================================================================
+# ============================================================================ 
 
 def run_consolidation() -> str:
     """
@@ -513,9 +534,9 @@ def run_consolidation() -> str:
     return f"Consolidation complete: {len(raw_ids_to_delete)} episodic memories compressed into {len(result.get('patterns', []))} semantic facts."
 
 
-# ============================================================================
+# ============================================================================ 
 # Identity Drift Detection
-# ============================================================================
+# ============================================================================ 
 
 def audit_identity_drift() -> str:
     """
@@ -563,9 +584,63 @@ def audit_identity_drift() -> str:
     return report
 
 
-# ============================================================================
+# ============================================================================ 
+# Proposal Engine (Phase 3)
+# ============================================================================ 
+
+def extract_proposal(response_text: str) -> Tuple[str, Optional[Dict[str, Any]]]:
+    """
+    Extract JSON proposal from the end of the response.
+    Returns (cleaned_response, proposal_dict_or_None).
+    """
+    # Look for JSON block at end: ```json ... ``` or just { ... }
+    # Regex to capture the last JSON block
+    json_block_regex = r"```json\s*(\{.*\})\s*```\s*$"
+    match = re.search(json_block_regex, response_text, re.DOTALL)
+
+    proposal = None
+    cleaned_text = response_text
+
+    if match:
+        json_str = match.group(1)
+        try:
+            data = json.loads(json_str)
+            if "proposal" in data:
+                proposal = data["proposal"]
+                # Remove the JSON block from the text presented to user
+                cleaned_text = response_text[:match.start()].strip()
+        except json.JSONDecodeError:
+            pass  # Malformed JSON, ignore
+    else:
+        # Fallback: try to find a raw JSON object at the end if no markdown tags
+        # This is riskier, so we rely on the prompt template enforcing markdown
+        pass
+
+    return cleaned_text, proposal
+
+
+def save_proposal(proposal: Dict[str, Any]) -> None:
+    """Save proposal to the queue."""
+    data = load_json(PROPOSALS_FILE)
+    pending = data.get("pending_proposals", [])
+
+    # Enrich proposal with metadata
+    proposal["id"] = str(uuid.uuid4())[:8]
+    proposal["timestamp"] = datetime.now().isoformat()
+    proposal["status"] = "pending"
+
+    pending.append(proposal)
+    # Limit queue size
+    if len(pending) > MAX_PENDING_PROPOSALS:
+        pending = pending[-MAX_PENDING_PROPOSALS:]
+
+    data["pending_proposals"] = pending
+    save_json(PROPOSALS_FILE, data)
+
+
+# ============================================================================ 
 # LLM Communication
-# ============================================================================
+# ============================================================================ 
 
 def call_mistral(prompt: str) -> str:
     """Send prompt to Mistral 7B via Ollama API."""
@@ -598,9 +673,9 @@ def call_mistral(prompt: str) -> str:
         return ""
 
 
-# ============================================================================
+# ============================================================================ 
 # Reflection System
-# ============================================================================
+# ============================================================================ 
 
 def reflect_on_output(output: str, self_model: Dict[str, Any]) -> Tuple[bool, Dict[str, Any]]:
     """Run reflection gates with tension weighting."""
@@ -608,7 +683,7 @@ def reflect_on_output(output: str, self_model: Dict[str, Any]) -> Tuple[bool, Di
     recent_memories = "\n".join([m["content"][:80] for m in decayed[-5:]])
 
     constraints_str = "\n".join(f"- {c}" for c in self_model["constraints"])
-    tension = self_model.get("internal_tension", {})
+    tension = self_model.get("internal_tension", {{}})
     tension_str = "\n".join(f"- {k}: {v:.0%}" for k, v in tension.items())
 
     gates = {
@@ -652,12 +727,12 @@ def log_reflection(user_input: str, output: str, gates: Dict[str, Any], approved
     save_json(REFLECTION_AUDIT_FILE, audit_data)
 
 
-# ============================================================================
+# ============================================================================ 
 # Agent Loop
-# ============================================================================
+# ============================================================================ 
 
 def run_agent_loop(user_input: str) -> str:
-    """Main agent loop (Phase 2)."""
+    """Main agent loop (Phase 2/3)."""
     initialize_memory_stores()
 
     self_model = load_self_model_current()
@@ -681,6 +756,18 @@ def run_agent_loop(user_input: str) -> str:
 
     if not output:
         return "Error: Failed to get response from Mistral."
+
+    # Phase 3: Proposal Extraction
+    cleaned_output, proposal = extract_proposal(output)
+    
+    # Process proposal if exists
+    proposal_status = "none"
+    if proposal:
+        save_proposal(proposal)
+        proposal_status = f"saved ({proposal.get('type')})"
+        # We reflect on the CLEANED output, so the proposal itself bypasses standard gates 
+        # (or should it be checked? For POC, we skip checking the JSON block itself)
+        output = cleaned_output
 
     approved, gates = reflect_on_output(output, self_model)
     log_reflection(user_input, output, gates, approved)
@@ -728,9 +815,10 @@ def inspect_memory() -> str:
     semantic = load_semantic()
     history = load_self_model_history()
     forgetting = load_json(FORGETTING_LOG_FILE).get("forgetting_events", [])
+    proposals = load_json(PROPOSALS_FILE).get("pending_proposals", [])
 
     result = f"""
-=== YEAST MEMORY STATE (Phase 2) ===
+=== YEAST MEMORY STATE (Phase 3) ===
 
 Identity:
 {self_model["identity"]}
@@ -740,29 +828,26 @@ Active Drives (Evaluative Weights):
     for drive in self_model["active_drives"]:
         result += f"  - {drive}\n"
 
-    result += f"""
-Internal Tension (Non-Actionable):
-"""
+    result += f"\nInternal Tension (Non-Actionable):\n"
     for k, v in self_model["internal_tension"].items():
         result += f"  - {k}: {v:.0%}\n"
 
-    result += f"""
-State:
-  Interactions: {self_model["internal_state"]["interaction_count"]}
-  Consolidations: {self_model["internal_state"]["consolidation_count"]}
-  Memories Forgotten: {self_model["internal_state"]["memories_forgotten"]}
-  Identity Versions: {self_model["internal_state"]["identity_versions"]}
-  Last Active: {self_model["internal_state"]["last_active"]}
+    result += f"\nState:\n"
+    result += f"  Interactions: {self_model['internal_state']['interaction_count']}\n"
+    result += f"  Consolidations: {self_model['internal_state']['consolidation_count']}\n"
+    result += f"  Memories Forgotten: {self_model['internal_state']['memories_forgotten']}\n"
+    result += f"  Identity Versions: {self_model['internal_state']['identity_versions']}\n"
+    result += f"  Last Active: {self_model['internal_state']['last_active']}\n"
 
-Memory Inventory:
-  Episodic (raw): {len(raw)}
-  Episodic (avg decay): {sum(m.get('decay', 1.0) for m in decayed) / max(1, len(decayed)):.0%}
-  Semantic: {len(semantic)}
-  Forgotten: {len(forgetting)}
-  Identity Snapshots: {len(history)}
+    result += f"\nMemory Inventory:\n"
+    result += f"  Episodic (raw): {len(raw)}\n"
+    result += f"  Episodic (avg decay): {sum(m.get('decay', 1.0) for m in decayed) / max(1, len(decayed)):.0%}\n"
+    result += f"  Semantic: {len(semantic)}\n"
+    result += f"  Forgotten: {len(forgetting)}\n"
+    result += f"  Identity Snapshots: {len(history)}\n"
+    result += f"  Pending Proposals: {len(proposals)}\n"
 
-Recent Episodic Memories:
-"""
+    result += f"\nRecent Episodic Memories:\n"
     for mem in decayed[-3:]:
         result += f"  - {mem['content'][:70]}... (decay: {mem.get('decay', 1.0):.0%})\n"
 
@@ -774,9 +859,9 @@ Recent Episodic Memories:
     return result
 
 
-# ============================================================================
+# ============================================================================ 
 # Main Entry Point
-# ============================================================================
+# ============================================================================ 
 
 def main() -> None:
     """Main entry point - read JSON command from stdin."""
@@ -813,7 +898,7 @@ def main() -> None:
                     response += f"Agent: {d['agent_response'][:100]}...\n"
                     response += f"Memory stored: {d['memory_stored']}\n\n"
         elif command == "--version":
-            response = "yeast-agent v0.2.0 (Phase 2: Memory Depth)"
+            response = "yeast-agent v0.3.0 (Phase 3: Soft Autonomy)"
         else:
             response = f"Unknown command: {command}"
 
