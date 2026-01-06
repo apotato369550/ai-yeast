@@ -863,6 +863,29 @@ Active Drives (Evaluative Weights):
 # Main Entry Point
 # ============================================================================ 
 
+def update_tension(key: str, value: float) -> str:
+    """Update internal tension parameter."""
+    self_model = load_self_model_current()
+    tension = self_model.get("internal_tension", {})
+
+    if key not in tension:
+        return f"Error: Invalid tension key '{key}'. Valid keys: {list(tension.keys())}"
+
+    try:
+        value = float(value)
+        if not (0.0 <= value <= 1.0):
+             return "Error: Tension value must be between 0.0 and 1.0"
+    except ValueError:
+        return "Error: Value must be a float"
+
+    old_value = tension[key]
+    tension[key] = value
+    self_model["internal_tension"] = tension
+    save_self_model_current(self_model)
+
+    return f"Tension '{key}' updated: {old_value} -> {value}"
+
+
 def main() -> None:
     """Main entry point - read JSON command from stdin."""
     try:
@@ -870,8 +893,13 @@ def main() -> None:
         command = input_data.get("command", "infer")
         user_input = input_data.get("input", "")
 
+
         if command == "infer":
             response = run_agent_loop(user_input)
+        elif command == "update_tension":
+            key = input_data.get("key")
+            value = input_data.get("value")
+            response = update_tension(key, value)
         elif command == "inspect":
             response = inspect_memory()
         elif command == "consolidate":
