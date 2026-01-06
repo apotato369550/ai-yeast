@@ -3,7 +3,7 @@ import sys
 from datetime import datetime, timedelta
 
 # Copy of the function from yeast-agent
-MEMORY_DECAY_HALF_LIFE_DAYS = 2
+MEMORY_DECAY_HALF_LIFE_DAYS = 1
 def calculate_decay(created_at: str, half_life_days: float = MEMORY_DECAY_HALF_LIFE_DAYS) -> float:
     """
     Calculate memory decay using exponential decay.
