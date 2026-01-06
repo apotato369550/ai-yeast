@@ -456,7 +456,12 @@ menu_mode() {
             view_recent_interactions
             stty -icanon -echo 2>/dev/null || true
             ;;
-          5)  # Exit
+          5)  # Adjust internal tension
+            stty "$original_tty_settings" 2>/dev/null || true
+            adjust_tension
+            stty -icanon -echo 2>/dev/null || true
+            ;;
+          6)  # Exit
             stty "$original_tty_settings" 2>/dev/null || true
             log_info "Goodbye!"
             exit 0
