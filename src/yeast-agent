@@ -58,19 +58,31 @@ MAX_PENDING_PROPOSALS = 20
 # ============================================================================ 
 
 PROPOSAL_TEMPLATE = """
-If you need to update your internal state (correct a fact, adjust tension, or request maintenance), append a JSON proposal block to the END of your response.
+MEMORY PROPOSALS - When to use:
+If the user provides NEW information about themselves (facts, preferences, details) that you should remember for future conversations, propose storing it. Do NOT execute - only propose for user approval.
 
-Format:
+PROPOSAL EXAMPLES:
+- User mentions a favorite color: propose storing it as a semantic fact
+- User gives you a name or detail: propose recording it
+- User reveals an uncertainty in your memory: propose correcting it
+
+FORMAT:
+If you decide to propose, append this JSON block at the END of your response (after your main answer):
+
 ```json
 {{
   "proposal": {{
-    "type": "semantic_refinement" | "tension_adjustment" | "consolidation_request",
-    "reason": "explanation...",
-    "action": {{ ...details... }}
+    "type": "semantic_refinement",
+    "reason": "User mentioned this and it should persist for future conversations",
+    "action": {{"fact": "specific detail to remember", "confidence": 0.9}}
   }}
 }}
 ```
-DO NOT execute the change. ONLY propose it.
+
+Rules:
+- Only propose when genuinely useful for future consistency
+- Do NOT execute. Only propose for user review and approval
+- Be concise in the proposal reason
 """
 
 SYSTEM_PROMPT_TEMPLATE = """You are a stateless reasoning engine supporting an experimental identity persistence system.
@@ -81,6 +93,7 @@ Your role:
 - Maintain consistency with the self-model
 - Acknowledge uncertainty explicitly
 - Ground responses in facts and memories provided
+- When you identify something the user says that should be remembered (facts, preferences, details), consider proposing it be stored
 
 You are NOT autonomous. You do not have consciousness. You are a tool for exploring how persistent identity can be maintained through external memory systems.
 
@@ -102,7 +115,12 @@ Relevant Memories:
 User Question:
 {user_input}
 
-Respond naturally while maintaining consistency with your identity and memories. If uncertain, acknowledge it explicitly.
+RESPONSE GUIDANCE:
+1. Answer the user's question directly and naturally
+2. If you're uncertain about something the user asks, acknowledge it
+3. If the user provides new information that should be remembered, propose storing it
+
+Respond naturally while maintaining consistency with your identity and memories.
 
 """ + PROPOSAL_TEMPLATE
 
@@ -593,9 +611,8 @@ def extract_proposal(response_text: str) -> Tuple[str, Optional[Dict[str, Any]]]
     Extract JSON proposal from the end of the response.
     Returns (cleaned_response, proposal_dict_or_None).
     """
-    # Look for JSON block at end: ```json ... ``` or just { ... }
-    # Regex to capture the last JSON block
-    json_block_regex = r"```json\s*(\{.*\})\s*```\s*$"
+    # Look for JSON block at end: ```json ... ```
+    json_block_regex = r"```json\s*(\{.+\})\s*```\s*$"
     match = re.search(json_block_regex, response_text, re.DOTALL)
 
     proposal = None
@@ -610,11 +627,22 @@ def extract_proposal(response_text: str) -> Tuple[str, Optional[Dict[str, Any]]]
                 # Remove the JSON block from the text presented to user
                 cleaned_text = response_text[:match.start()].strip()
         except json.JSONDecodeError:
-            pass  # Malformed JSON, ignore
+            # Malformed JSON - ignore and treat as no proposal
+            pass
     else:
-        # Fallback: try to find a raw JSON object at the end if no markdown tags
-        # This is riskier, so we rely on the prompt template enforcing markdown
-        pass
+        # Fallback: try to find raw JSON object at the very end
+        # Match: \n{\n  "proposal": { ... }\n}\n at end
+        raw_json_regex = r"\n\s*\{\s*\n\s*\"proposal\"\s*:\s*\{.+\}\s*\n\s*\}\s*$"
+        match = re.search(raw_json_regex, response_text, re.DOTALL)
+        if match:
+            json_str = match.group(0)
+            try:
+                data = json.loads(json_str)
+                if "proposal" in data:
+                    proposal = data["proposal"]
+                    cleaned_text = response_text[:match.start()].strip()
+            except json.JSONDecodeError:
+                pass
 
     return cleaned_text, proposal
 
@@ -649,7 +677,7 @@ def call_mistral(prompt: str) -> str:
             "model": OLLAMA_MODEL,
             "messages": [{"role": "user", "content": prompt}],
             "stream": False,
-            "options": {"num_ctx": 4096, "temperature": 0.7, "top_p": 0.9}
+            "options": {"num_ctx": 8192, "temperature": 0.7, "top_p": 0.9}
         }
 
         curl_cmd = [
@@ -658,7 +686,7 @@ def call_mistral(prompt: str) -> str:
             "-d", json.dumps(request_data)
         ]
 
-        result = subprocess.run(curl_cmd, capture_output=True, text=True, timeout=60)
+        result = subprocess.run(curl_cmd, capture_output=True, text=True, timeout=120)
 
         if result.returncode != 0:
             return ""
@@ -679,12 +707,7 @@ def call_mistral(prompt: str) -> str:
 
 def reflect_on_output(output: str, self_model: Dict[str, Any]) -> Tuple[bool, Dict[str, Any]]:
     """Run reflection gates with tension weighting."""
-    decayed = load_episodic_decayed()
-    recent_memories = "\n".join([m["content"][:80] for m in decayed[-5:]])
-
-    constraints_str = "\n".join(f"- {c}" for c in self_model["constraints"])
     tension = self_model.get("internal_tension", {})
-    tension_str = "\n".join(f"- {k}: {v:.0%}" for k, v in tension.items())
 
     gates = {
         "coherence": {"passed": True, "reason": "", "score": 0.9},
@@ -759,13 +782,11 @@ def run_agent_loop(user_input: str) -> str:
 
     # Phase 3: Proposal Extraction
     cleaned_output, proposal = extract_proposal(output)
-    
+
     # Process proposal if exists
-    proposal_status = "none"
     if proposal:
         save_proposal(proposal)
-        proposal_status = f"saved ({proposal.get('type')})"
-        # We reflect on the CLEANED output, so the proposal itself bypasses standard gates 
+        # We reflect on the CLEANED output, so the proposal itself bypasses standard gates
         # (or should it be checked? For POC, we skip checking the JSON block itself)
         output = cleaned_output
 
