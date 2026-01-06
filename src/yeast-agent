@@ -62,13 +62,13 @@ If you need to update your internal state (correct a fact, adjust tension, or re
 
 Format:
 ```json
-{
-  "proposal": {
+{{
+  "proposal": {{
     "type": "semantic_refinement" | "tension_adjustment" | "consolidation_request",
     "reason": "explanation...",
-    "action": { ...details... }
-  }
-}
+    "action": {{ ...details... }}
+  }}
+}}
 ```
 DO NOT execute the change. ONLY propose it.
 """
@@ -182,20 +182,20 @@ def initialize_memory_stores() -> None:
     if not EPISODIC_RAW_FILE.exists():
         save_json(EPISODIC_RAW_FILE, {
             "memories": [],
-            "metadata": {{"created": datetime.now().isoformat(), "version": "0.3.0"}}
+            "metadata": {"created": datetime.now().isoformat(), "version": "0.3.0"}
         })
 
     if not EPISODIC_DECAYED_FILE.exists():
         save_json(EPISODIC_DECAYED_FILE, {
             "memories": [],
-            "metadata": {{"created": datetime.now().isoformat(), "version": "0.3.0"}}
+            "metadata": {"created": datetime.now().isoformat(), "version": "0.3.0"}
         })
 
     # Semantic: distilled facts
     if not SEMANTIC_DISTILLED_FILE.exists():
         save_json(SEMANTIC_DISTILLED_FILE, {
             "facts": [],
-            "metadata": {{"created": datetime.now().isoformat(), "version": "0.3.0"}}
+            "metadata": {"created": datetime.now().isoformat(), "version": "0.3.0"}
         })
 
     # Self-model: current + history
@@ -238,27 +238,27 @@ def initialize_memory_stores() -> None:
     if not SELF_MODEL_HISTORY_FILE.exists():
         save_json(SELF_MODEL_HISTORY_FILE, {
             "snapshots": [],
-            "metadata": {{"created": datetime.now().isoformat(), "version": "0.3.0"}}
+            "metadata": {"created": datetime.now().isoformat(), "version": "0.3.0"}
         })
 
     # Reflection
     if not REFLECTION_AUDIT_FILE.exists():
         save_json(REFLECTION_AUDIT_FILE, {
             "audits": [],
-            "metadata": {{"created": datetime.now().isoformat(), "version": "0.3.0"}}
+            "metadata": {"created": datetime.now().isoformat(), "version": "0.3.0"}
         })
 
     if not FORGETTING_LOG_FILE.exists():
         save_json(FORGETTING_LOG_FILE, {
             "forgetting_events": [],
-            "metadata": {{"created": datetime.now().isoformat(), "version": "0.3.0"}}
+            "metadata": {"created": datetime.now().isoformat(), "version": "0.3.0"}
         })
 
     # Proposals (Phase 3)
     if not PROPOSALS_FILE.exists():
         save_json(PROPOSALS_FILE, {
             "pending_proposals": [],
-            "metadata": {{"created": datetime.now().isoformat(), "version": "0.3.0"}}
+            "metadata": {"created": datetime.now().isoformat(), "version": "0.3.0"}
         })
 
 
@@ -293,7 +293,7 @@ def apply_decay_to_episodic() -> None:
 
     decayed_data = {
         "memories": memories,
-        "metadata": {{"last_decayed": datetime.now().isoformat(), "version": "0.3.0"}}
+        "metadata": {"last_decayed": datetime.now().isoformat(), "version": "0.3.0"}
     }
     save_json(EPISODIC_DECAYED_FILE, decayed_data)
 
@@ -683,7 +683,7 @@ def reflect_on_output(output: str, self_model: Dict[str, Any]) -> Tuple[bool, Di
     recent_memories = "\n".join([m["content"][:80] for m in decayed[-5:]])
 
     constraints_str = "\n".join(f"- {c}" for c in self_model["constraints"])
-    tension = self_model.get("internal_tension", {{}})
+    tension = self_model.get("internal_tension", {})
     tension_str = "\n".join(f"- {k}: {v:.0%}" for k, v in tension.items())
 
     gates = {
@@ -934,7 +934,9 @@ def main() -> None:
         print(json.dumps(result))
 
     except Exception as e:
-        error_result = {"status": "error", "error": str(e)}
+        import traceback
+        tb = traceback.format_exc()
+        error_result = {"status": "error", "error": str(e), "traceback": tb}
         print(json.dumps(error_result))
         sys.exit(1)
 
