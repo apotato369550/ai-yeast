@@ -296,10 +296,11 @@ def score_memories_semantic(query: str) -> List[Tuple[Memory, float]]:
 ## 7. Implementation Priority (If Continuing Phase 2)
 
 **HIGH** (fix before shipping):
-1. [ ] Bug fix: Reflection gate reference (line 603)
-2. [ ] Test decay function mathematically
-3. [ ] Test consolidation pattern extraction
-4. [ ] Verify tension affects gate scoring
+1. [x] Bug fix: Reflection gate reference (line 603) (Verified as correct in code)
+2. [x] Test decay function mathematically (Verified with src/test_decay.py)
+3. [x] Update decay to 48 hours (2 days) for faster testing cycle
+4. [ ] Test consolidation pattern extraction
+5. [ ] Verify tension affects gate scoring
 
 **MEDIUM** (nice to have):
 5. [ ] Drift detection multi-snapshot analysis
@@ -374,8 +375,9 @@ grep '"coherence"' ~/yeast-data/reflection/audits.json
 
 | Item | Status | Priority | Effort | Phase |
 |------|--------|----------|--------|-------|
-| Fix reflection gate bug | ❌ | HIGH | 5min | 2 |
-| Decay function test | ❌ | HIGH | 30min | 2 |
+| Fix reflection gate bug | ✅ | HIGH | 5min | 2 |
+| Decay function test | ✅ | HIGH | 30min | 2 |
+| Update Decay (48h) | ✅ | HIGH | 10min | 2 |
 | Consolidation tests | ❌ | MEDIUM | 2hrs | 2 |
 | Drift multi-snapshot | ❌ | MEDIUM | 1hr | 2 |
 | Tension verification | ❌ | HIGH | 1hr | 2 |
@@ -385,7 +387,7 @@ grep '"coherence"' ~/yeast-data/reflection/audits.json
 
 ---
 
-**Total Phase 2 remaining**: ~6-7 hours of work
-**Critical path**: Bug fix + decay test + tension verification
-**Ready to test after**: Decay function validation + bug fix
+**Total Phase 2 remaining**: ~4-5 hours of work
+**Critical path**: Consolidation tests + tension verification
+**Ready to test after**: Consolidation tests match new decay rate
 
