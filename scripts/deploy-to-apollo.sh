@@ -16,6 +16,9 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 CYAN='\033[0;36m'
+WHITE='\033[1;37m'
+BOLD='\033[1m'
+DIM='\033[2m'
 NC='\033[0m' # No Color
 
 # Logging
@@ -40,9 +43,11 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 echo ""
-echo -e "${CYAN}╔════════════════════════════════════════════════════╗${NC}"
-echo -e "${CYAN}║${NC}    Yeast Phase 4 Deployment to apollo.local    ${CYAN}║${NC}"
-echo -e "${CYAN}╚════════════════════════════════════════════════════╝${NC}"
+echo -e "${YELLOW}   .---.      ${NC}"
+echo -e "${YELLOW}  /     \\     ${NC}${CYAN}  ╔══════════════════════════════════════════╗${NC}"
+echo -e "${YELLOW} (       )    ${NC}${CYAN}  ║${NC}     ${NC}${WHITE}${BOLD}🍞 AI YEAST${NC} - ${NC}${CYAN}Phase 5 Consolidation   ${CYAN}║${NC}"
+echo -e "${YELLOW}  \\     /     ${NC}${CYAN}  ║${NC}       ${NC}${DIM}the starter is bubbling...${NC}         ${CYAN}║${NC}"
+echo -e "${YELLOW}   '---'      ${NC}${CYAN}  ╚══════════════════════════════════════════╝${NC}"
 echo ""
 
 # Step 1: Verify SSH connectivity
@@ -78,6 +83,8 @@ log_info "Deploying yeast-agent.js..."
 if scp "${PROJECT_ROOT}/src/agent/yeast-agent.js" "${APOLLO_ADDR}:~/" >/dev/null 2>&1; then
   log_success "yeast-agent.js deployed"
   ssh "${APOLLO_ADDR}" "chmod +x ~/yeast-agent.js" >/dev/null
+  ssh "${APOLLO_ADDR}" "mkdir -p ~/prompts" >/dev/null
+  scp -r "${PROJECT_ROOT}/src/agent/prompts/"* "${APOLLO_ADDR}:~/prompts/" >/dev/null
 else
   log_error "Failed to deploy yeast-agent.js"
   exit 1
