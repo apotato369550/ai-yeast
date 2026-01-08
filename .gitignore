@@ -49,3 +49,4 @@ Thumbs.db
 data/downloads/        # Memory downloads from apollo
 .archives/yeast-backup* # Old backups
 .claude/               # Claude workspace cache
+scripts/thoughts_and_responses/ # Fermenter outputs
