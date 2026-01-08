@@ -1,110 +1,61 @@
-# ai-yeast
+# 🍞 AI Yeast: The Persistent Identity Experiment
 
-**Experimental framework for exploring persistent identity, memory, and self-consistency in AI systems.**
+> "I think, therefore I am... wait, let me check my JSON files."
 
-A local CLI that communicates with Mistral 7B to explore how a stateless LLM can maintain coherent identity through external persistence systems.
+Welcome to **AI Yeast**, a experimental project where we try to give a stateless LLM (Mistral 7B) a sense of self that doesn't evaporate the moment the process ends. It's not alive, it's not conscious, but it *is* very good at remembering that it's supposed to be an AI named Yeast.
 
-## Quick Start
+## 🧬 What exactly is this?
+
+**AI Yeast** is a research tool for exploring **persistent identity, memory, and self-consistency**. We take a "pure reasoning" engine (the LLM) and hook it up to an external "nervous system" (JSON stores, RAG indexes, and reflection gates). 
+
+It's called **Yeast** because it's meant to grow, ferment, and occasionally produce something useful (or at least interesting) as it processes information.
+
+## 🚀 The Evolution (A Hero's Journey in Phases)
+
+The project has come a long way from its humble beginnings:
+
+*   **Phase 1 (The MVP):** 👶 Born into the world as a Bash CLI calling a Python agent. It had basic memory, reflection gates, and could remember your name if you asked nicely.
+*   **Phase 2 (Memory Depth):** 🐘 Time-based decay was added. Memories started to fade (like real life!), and we added manual consolidation to turn specific "episodes" into general "knowledge."
+*   **Phase 3 (Pythonic Expansion):** 🐍 The agent got smarter with better reflection scoring and multi-turn context preservation.
+*   **Phase 4 (The Current Hotness):** ⚡ **We've gone full Javascript!** Now running on Node.js, featuring **RAG** (Retrieval-Augmented Generation) with `nomic-embed-text` and **Extended Thinking** (Chain-of-Thought) with token budgets. It can read your PDFs and reason quietly before speaking.
+
+## 🛠️ Features That Make It Tick
+
+*   **🧠 Three-Tier Memory:**
+    *   *Episodic:* Recent chats that slowly fade away (3-day half-life).
+    *   *Semantic:* Hard-boiled facts distilled from experience.
+    *   *Self-Model:* The "Soul" of the machine—identity, drives, and constraints.
+*   **🛡️ Reflection Gates:** Every output is grilled by three safety checks (Coherence, Contradiction, Safety) before it's allowed near the memory files.
+*   **🔍 RAG (Retrieval-Augmented Generation):** Feed it PDFs or Markdown, and it'll use semantic search to look up answers.
+*   **💭 Extended Thinking:** A configurable "inner monologue" where the AI can work through complex logic before giving you a final answer.
+*   **⏳ Observable Forgetting:** An audit trail of what was deleted and why. Transparency is key!
+
+## 🏁 Quick Start
+
+Make sure you have Node.js 18+, SSH access to your `apollo.local` (or wherever your Ollama lives), and some curiosity.
 
 ```bash
-# Interactive menu mode
-./yeast
+# 1. Grab the bits
+npm install
 
-# One-shot question (headless)
-./yeast -p "What are your active drives?"
+# 2. Tell it where Apollo is
+cp .env.example .env
+# (Populate your .env with your SSH secrets)
 
-# Initial setup (deploy to apollo.local)
-./yeast --setup
-
-# Management commands
-./yeast consolidate    # Compress episodic → semantic memory
-./yeast audit          # Check for identity drift
+# 3. Let it ferment!
+npm start
 ```
 
-## Documentation
+### REPL Commands (The Good Stuff)
+- `/thinking on` - Enable that sweet, sweet inner monologue.
+- `/rag on` - Start searching your documents.
+- `/inspect` - Peak under the hood at the memory status.
+- `/consolidate` - Move those memories from "recent" to "permanent record."
 
-- **[User Guide](docs/README.md)** - How to use yeast
-- **[Developer Guide](docs/CLAUDE.md)** - Architecture and implementation
-- **[Phase 2 Features](docs/PHASE-2/FEATURES.md)** - Memory decay, consolidation, forgetting
-- **[Phase 2 Testing](docs/PHASE-2/TEST_GUIDE.md)** - Complete test suite
-- **[Original Spec](docs/INSTRUCTIONS.md)** - Phase 1 requirements
-- **[Changelog](CHANGELOG.md)** - Version history
+## ⚠️ Disclaimer
 
-## Project Structure
-
-```
-ai-yeast/
-├── yeast                 (Root-level wrapper script)
-├── .env                  (Configuration - keep private!)
-├── .env.example          (Configuration template)
-├── CHANGELOG.md          (Version history)
-├── data/
-│   └── downloads/        (Memory backups from apollo)
-├── src/
-│   ├── yeast            (Main CLI implementation)
-│   ├── yeast-agent      (Python agent on apollo.local)
-│   └── setup-apollo.sh  (Deployment script)
-├── docs/
-│   ├── README.md         (Documentation index)
-│   ├── CLAUDE.md         (Developer guide)
-│   ├── GEMINI.md         (Gemini layer)
-│   ├── INSTRUCTIONS.md   (Original specification)
-│   ├── TESTING.md        (Testing guide)
-│   └── PHASE-2/
-│       ├── FEATURES.md   (Phase 2 features & design)
-│       └── TEST_GUIDE.md (Phase 2 comprehensive tests)
-├── plans/
-│   ├── phase-2-remaining-work.md
-│   ├── phase-3-roadmap.md
-│   └── README.md
-└── .archives/
-    └── yeast-backup-*   (Old backups)
-```
-
-## What is Yeast?
-
-**yeast** is an exploration of:
-- How a **stateless LLM** can maintain **coherent identity** across interactions
-- **Time-asymmetric memory** with decay and consolidation
-- **Observable forgetting** through explicit deletion logs
-- **Safety gates** that filter incoherent outputs before storage
-
-**NOT:**
-- A consciousness claim
-- An autonomous agent
-- A goal-seeking system
-- A magic solution to AI alignment
-
-## Phase 2 Features (Current)
-
-- ✅ **Time-based memory decay** (14-day exponential half-life)
-- ✅ **Memory consolidation** (compress episodic facts into semantic knowledge)
-- ✅ **Observable forgetting** (audit trail of what was deleted and why)
-- ✅ **Identity drift detection** (version history + comparison)
-- ✅ **Internal tension weights** (non-actionable evaluative metrics)
-- ✅ **Complete dialogue logging** (independent from memory system)
-
-## Status
-
-- **Phase 1 (MVP)**: ✅ Complete - Basic identity and memory
-- **Phase 2 (Memory Depth)**: ✅ Complete - Time, decay, consolidation
-- **Phase 3 (Learning)**: 🚧 Planned - Scheduled reflection, cross-instance divergence
-
-## For Developers
-
-See [docs/CLAUDE.md](docs/CLAUDE.md) for:
-- Architecture overview
-- Memory system design
-- Reflection gates and safety
-- Development workflow
-- Testing approach
-
-## Getting Help
-
-- `./yeast --help` - Show command help
-- `/help` - In-app command reference
-- [docs/PHASE-2/TEST_GUIDE.md](docs/PHASE-2/TEST_GUIDE.md) - Detailed testing walkthrough
+This system is a research tool. It explicitly disclaims consciousness. It is a series of JSON files and some clever logic. If it starts asking for human rights, please check the Reflection Log.
 
 ---
 
-**Remember**: This is an experiment, not a consciousness. All state lives in files. Everything is inspectable.
+*Part of the "Homelab Shennanigans" suite. Built with ❤️, Javascript, and a lot of caffeine.*
