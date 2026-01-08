@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
-# Root-level wrapper for yeast - delegates to src/yeast
+# Root-level wrapper for yeast - delegates to npm start
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-exec "$SCRIPT_DIR/src/yeast" "$@"
+cd "$SCRIPT_DIR"
+exec npm start -- "$@"
