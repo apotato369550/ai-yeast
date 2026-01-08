@@ -21,8 +21,33 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, List, Any, Tuple, Optional
 
+def load_config_from_env() -> None:
+    """Load configuration from .env file if it exists."""
+    global MEMORY_DECAY_HALF_LIFE_DAYS
+    
+    env_path = Path.home() / ".env"
+    if env_path.exists():
+        try:
+            with open(env_path, 'r') as f:
+                for line in f:
+                    line = line.strip()
+                    if line and not line.startswith('#'):
+                        if '=' in line:
+                            key, value = line.split('=', 1)
+                            key = key.strip()
+                            value = value.strip().strip('"')
+                            
+                            if key == "MEMORY_DECAY_HALF_LIFE_DAYS":
+                                try:
+                                    MEMORY_DECAY_HALF_LIFE_DAYS = float(value)
+                                except ValueError:
+                                    pass  # Keep default if not a valid number
+        except Exception as e:
+            pass  # Silently fail if env file can't be read
+
 # ============================================================================ 
 # Configuration
+
 # ============================================================================ 
 
 MEMORY_DIR = Path.home() / "yeast-data"
@@ -47,7 +72,7 @@ DIALOGUE_LOG_FILE = MEMORY_DIR / "dialogue.json"
 PROPOSALS_FILE = REFLECTION_DIR / "proposals.json"
 
 # Constants
-MEMORY_DECAY_HALF_LIFE_DAYS = 2  # Episodic memories decay to 50% in 2 days (48 hours)
+MEMORY_DECAY_HALF_LIFE_DAYS = 3  # Episodic memories decay to 50% in 3 days (will be overridden by .env if present)
 MAX_EPISODIC_MEMORIES = 50
 MAX_SEMANTIC_FACTS = 100
 MAX_REFLECTION_AUDITS = 100
@@ -908,6 +933,7 @@ def update_tension(key: str, value: float) -> str:
 
 
 def main() -> None:
+    load_config_from_env()
     """Main entry point - read JSON command from stdin."""
     try:
         input_data = json.loads(sys.stdin.read())
