@@ -68,7 +68,7 @@ class ApolloClient {
     if (connObj) connObj.inUse = false;
   }
 
-  async sendCommand(command, input, thinkingEnabled = false, thinkingBudget = 1500, ragDocs = []) {
+  async sendCommand(command, input, thinkingEnabled = false, thinkingBudget = 1500, ragDocs = [], memoryContext = { episodic: [], semantic: [] }) {
     let connObj;
     try {
       connObj = await this.getConnection();
@@ -80,7 +80,8 @@ class ApolloClient {
         thinking_enabled: thinkingEnabled,
         thinking_budget: thinkingBudget,
         rag_docs: ragDocs,
-        memory_context: { episodic_count: 0, semantic_count: 0 },
+        memory_context: memoryContext,
+        no_proposals: config.NO_PROPOSALS,
       };
 
       const result = await Promise.race([

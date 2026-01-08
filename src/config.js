@@ -22,11 +22,14 @@ const defaults = {
   RAG_EMBEDDING_DIMS: '384',
   RAG_ENABLED: 'true',
   OLLAMA_TIMEOUT_MS: '10000',
+  OLLAMA_API_URL: '', // Optional override for direct HTTP access
+  EMBEDDING_VIA_SSH: 'true', // Default to true if remote host is remote
   THINKING_ENABLED: 'true',
   THINKING_BUDGET: '1500',
   THINKING_MEMORY_DEPTH: '5',
   THINKING_RAG_CONTEXT: 'true',
   THINKING_AUTO_TRUNCATE: 'true',
+  NO_PROPOSALS: 'false',
   MISTRAL_TIMEOUT_MS: '45000',
   MEMORY_DECAY_HALF_LIFE_DAYS: '3',
   MEMORY_DIR: '~/yeast-data',
@@ -43,7 +46,7 @@ numericKeys.forEach((key) => {
   config[key] = parseInt(config[key], 10);
 });
 
-const booleanKeys = ['RAG_ENABLED', 'THINKING_ENABLED', 'THINKING_RAG_CONTEXT', 'THINKING_AUTO_TRUNCATE'];
+const booleanKeys = ['RAG_ENABLED', 'THINKING_ENABLED', 'THINKING_RAG_CONTEXT', 'THINKING_AUTO_TRUNCATE', 'EMBEDDING_VIA_SSH', 'NO_PROPOSALS'];
 booleanKeys.forEach((key) => {
   config[key] = config[key] === 'true';
 });

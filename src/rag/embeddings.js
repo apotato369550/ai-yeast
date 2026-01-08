@@ -1,11 +1,26 @@
 import axios from 'axios';
 import config from '../config.js';
+import apolloClient from '../ssh/apolloClient.js';
 
-const OLLAMA_BASE_URL = `http://${config.APOLLO_HOST}:11434`;
+const OLLAMA_BASE_URL = config.OLLAMA_API_URL || `http://${config.APOLLO_HOST}:11434`;
 
 export async function generateEmbedding(text) {
   if (!text) return null;
 
+  // Try SSH route if configured (more reliable for remote apollo)
+  if (config.EMBEDDING_VIA_SSH && config.APOLLO_HOST !== 'localhost' && config.APOLLO_HOST !== '127.0.0.1') {
+    try {
+      const response = await apolloClient.sendCommand('embed', text, false, 0, []);
+      if (response && response.success && response.embedding) {
+        return response.embedding;
+      }
+      console.warn(`SSH embedding failed: ${response?.error || 'Unknown error'}. Falling back to HTTP...`);
+    } catch (error) {
+      console.warn(`SSH embedding error: ${error.message}. Falling back to HTTP...`);
+    }
+  }
+
+  // Fallback to direct HTTP (useful for local Ollama or tunnels)
   try {
     const response = await axios.post(`${OLLAMA_BASE_URL}/api/embed`, {
       model: config.RAG_EMBEDDINGS_MODEL,
@@ -18,7 +33,7 @@ export async function generateEmbedding(text) {
     throw new Error('No embedding in response');
   } catch (error) {
     if (error.code === 'ECONNREFUSED') {
-      throw new Error(`Cannot connect to Ollama at ${OLLAMA_BASE_URL}`);
+      throw new Error(`Cannot connect to Ollama at ${OLLAMA_BASE_URL}. If your model is remote, ensure EMBEDDING_VIA_SSH is true in .env or setup an SSH tunnel.`);
     }
     throw error;
   }
