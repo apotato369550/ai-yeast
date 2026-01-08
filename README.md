@@ -56,6 +56,30 @@ npm start
 
 This system is a research tool. It explicitly disclaims consciousness. It is a series of JSON files and some clever logic. If it starts asking for human rights, please check the Reflection Log.
 
+## 🧠 Adaptive Memory Philosophy
+
+We view the AI's internal dynamics through four lenses:
+- **Prompt Injection** → *Social Context*: The immediate environment and tone.
+- **RAG** → *Knowledge*: External facts retrieved on-demand.
+- **Chain-of-Thought** → *Reasoning/Thinking*: The active processing of logic.
+- **Memory** → *Persistence/Experience*: The long-term accumulation of self.
+
+In Phase 5, memory becomes **adaptive**. Instead of simple time-based decay, memories are now judged by their **utility**. The more a memory is accessed and used, the more "consolidated" it becomes, exerting a stronger influence on the model. Memories that are rarely touched are allowed to decay naturally, letting the system "discern" what is truly worth keeping based on the current context.
+
+## 🧪 Batch Fermentation (The Fermenter)
+
+Phase 5 introduces the **Fermenter**, a batch processing tool for feeding large amounts of "starches" (prompts) to Yeast.
+
+### Usage
+1.  **Prepare Starches**: Create a `.txt` or `.md` file in `scripts/prompts/` (e.g., `experiment_v1.md`).
+2.  **Add Prompts**: Put one prompt per line. The Fermenter will ignore lines starting with `#` (Markdown headers).
+3.  **Run the Fermenter**:
+    - **All files**: `node scripts/fermenter.js`
+    - **Specific file**: `node scripts/fermenter.js experiment_v1.md`
+4.  **Harvest Results**: Full outputs and "thoughts" are saved as JSON in `scripts/thoughts_and_responses/`.
+
+The Fermenter runs in headless mode with `--no-proposals` by default to keep the memory clean of meta-update suggestions while processing data.
+
 ---
 
 *Part of the "Homelab Shennanigans" suite. Built with ❤️, Javascript, and a lot of caffeine.*
