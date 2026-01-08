@@ -23,6 +23,7 @@ export async function addEpisodic(content, source = 'interaction', confidence = 
     content,
     source,
     confidence,
+    access_count: 0,
   };
   memories.push(newMemory);
 
@@ -45,6 +46,27 @@ export async function addEpisodic(content, source = 'interaction', confidence = 
   return newMemory;
 }
 
+export async function incrementAccess(ids) {
+  if (!ids || ids.length === 0) return;
+  const memories = await loadEpisodic();
+  let changed = false;
+  memories.forEach((m) => {
+    if (ids.includes(m.id)) {
+      m.access_count = (m.access_count || 0) + 1;
+      changed = true;
+    }
+  });
+
+  if (changed) {
+    const paths = getMemoryPaths();
+    await saveJSON(paths.episodicRaw, {
+      memories,
+      version: '0.4.0',
+      updated_at: new Date().toISOString(),
+    });
+  }
+}
+
 export async function getEpisodicSummary() {
   const memories = await loadEpisodic();
   const decayed = applyDecayToEpisodic(memories);
@@ -59,4 +81,4 @@ export async function getEpisodicSummary() {
   };
 }
 
-export default { loadEpisodic, loadEpisodicWithDecay, addEpisodic, getEpisodicSummary };
+export default { loadEpisodic, loadEpisodicWithDecay, addEpisodic, getEpisodicSummary, incrementAccess };

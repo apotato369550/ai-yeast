@@ -1,7 +1,7 @@
 import readline from 'readline';
 import chalk from 'chalk';
 import apolloClient from '../ssh/apolloClient.js';
-import { addEpisodic, getEpisodicSummary } from '../memory/episodic.js';
+import { addEpisodic, getEpisodicSummary, loadEpisodicWithDecay } from '../memory/episodic.js';
 import { getSemanticSummary } from '../memory/semantic.js';
 import { loadSelfModel } from '../memory/selfModel.js';
 import { getRAGStatus, retrieveDocuments } from '../rag/retrieval.js';
@@ -131,13 +131,26 @@ async function sendMessage(userInput) {
   console.log(`\n${chalk.cyan('🤖 yeast')}`);
   console.log(chalk.dim('(thinking...)\n'));
 
+  // Fetch recent memories for context
+  const episodicMemories = await loadEpisodicWithDecay();
+  const recentMemories = episodicMemories.slice(-config.THINKING_MEMORY_DEPTH);
+
   const response = await apolloClient.sendCommand(
     'infer',
     userInput,
     thinkingEnabled,
     config.THINKING_BUDGET,
-    ragDocs.map((d) => ({ id: d.id, content: d.filename, source: d.source }))
+    ragDocs.map((d) => ({ id: d.id, content: d.filename, source: d.source })),
+    {
+      episodic: recentMemories.map(m => ({ id: m.id, content: m.content, timestamp: m.timestamp })),
+      semantic: [] // TODO: Add semantic retrieval
+    }
   );
+
+  // Increment access counts for memories used
+  if (recentMemories.length > 0) {
+    await (await import('../memory/episodic.js')).incrementAccess(recentMemories.map(m => m.id));
+  }
 
   if (!response.success) {
     console.log(`\n${chalk.red('✗ Error')}: ${response.error}`);
@@ -166,9 +179,13 @@ async function sendMessage(userInput) {
   console.log(chalk.white(response.response));
   console.log();
 
-  await addEpisodic(`User asked: "${userInput}". Response: "${response.response.substring(0, 100)}..."`, 'interaction', 0.85);
+  // Reading as Memory: Add user input with saliency
+  await addEpisodic(`User: "${userInput}"`, 'observation', response.saliency || 0.5);
 
-  if (response.memory_updates) {
+  // Also add the interaction itself
+  await addEpisodic(`Conversation: User said "${userInput.substring(0, 50)}...", I replied "${response.response.substring(0, 50)}..."`, 'interaction', 0.85);
+
+  if (response.memory_updates && !config.NO_PROPOSALS) {
     const updates = [];
     if (response.memory_updates.episodic_added > 0) {
       updates.push(chalk.green(`+${response.memory_updates.episodic_added} episodic`));
@@ -184,13 +201,18 @@ async function sendMessage(userInput) {
 }
 
 export default async function startREPL() {
-  // Display startup banner
-  console.log(chalk.cyan('  ╔═══════════════════════════════╗'));
-  console.log(chalk.cyan('  ║  yeast v0.4.0 - Phase 4 ✨   ║'));
-  console.log(chalk.cyan('  ║  RAG • Thinking • Memory      ║'));
-  console.log(chalk.cyan('  ╚═══════════════════════════════╝\n'));
+  // Bubbling artisanal yeast banner
+  const banner = `
+   ${chalk.yellow('╭──────────────────────────────────────────╮')}
+   ${chalk.yellow('│')}  ${chalk.white.bold('🍞 AI YEAST')} ${chalk.dim('- Phase 5 Consolidation')}  ${chalk.yellow('│')}
+   ${chalk.yellow('│')}    ${chalk.dim('the starter is bubbling...')}       ${chalk.yellow('│')}
+   ${chalk.yellow('╰───┬──────────────────────────────────┬───╯')}
+       ${chalk.yellow('│')}    ${chalk.white('○')}  ${chalk.white('°')}  ${chalk.white('◌')}  ${chalk.white('○')}  ${chalk.white('°')}  ${chalk.white('◌')}    ${chalk.yellow('│')}
+       ${chalk.yellow('╰──────────────────────────────────────╯')}
+  `;
+  console.log(chalk.cyan(banner));
 
-  console.log(chalk.cyan('yeast!') + ' v0.4.0 - Type ' + chalk.yellow('/help') + ' for commands');
+  console.log(chalk.cyan('yeast!') + ' v0.5.0 - Type ' + chalk.yellow('/help') + ' for commands');
   console.log(chalk.dim(`> [Thinking:${thinkingEnabled ? 'ON' : 'OFF'} RAG:${ragEnabled ? 'ON' : 'OFF'}]\n`));
 
   const askQuestion = () => {

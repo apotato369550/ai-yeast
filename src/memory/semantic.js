@@ -18,6 +18,7 @@ export async function addSemantic(content, source = 'consolidation', confidence 
     source,
     confidence,
     revisions: [],
+    access_count: 0,
   };
   facts.push(newFact);
 
