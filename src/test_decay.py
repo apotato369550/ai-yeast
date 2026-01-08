@@ -1,9 +1,8 @@
-
 import sys
 from datetime import datetime, timedelta
 
 # Copy of the function from yeast-agent
-MEMORY_DECAY_HALF_LIFE_DAYS = 1
+MEMORY_DECAY_HALF_LIFE_DAYS = 3  # Updated to 3 days
 def calculate_decay(created_at: str, half_life_days: float = MEMORY_DECAY_HALF_LIFE_DAYS) -> float:
     """
     Calculate memory decay using exponential decay.
@@ -21,7 +20,7 @@ def calculate_decay(created_at: str, half_life_days: float = MEMORY_DECAY_HALF_L
         return 1.0
 
 def test_decay():
-    print("Testing decay function logic...")
+    print("Testing decay function logic (3-day half-life)...")
     
     now = datetime.now()
     
@@ -30,26 +29,26 @@ def test_decay():
     print(f"Age 0 days: {res}")
     assert abs(res - 1.0) < 0.0001, f"Expected ~1.0, got {res}"
     
-    # Test 2: 2 days (half life)
-    past_2_days = now - timedelta(days=2)
-    res = calculate_decay(past_2_days.isoformat())
-    print(f"Age 2 days: {res}")
+    # Test 2: 3 days (half life)
+    past_3_days = now - timedelta(days=3)
+    res = calculate_decay(past_3_days.isoformat())
+    print(f"Age 3 days: {res}")
     # Should be close to 0.5
     assert abs(res - 0.5) < 0.01, f"Expected ~0.5, got {res}"
     
-    # Test 3: 4 days (2 half lives) -> 0.25
-    past_4_days = now - timedelta(days=4)
-    res = calculate_decay(past_4_days.isoformat())
-    print(f"Age 4 days: {res}")
+    # Test 3: 6 days (2 half lives) -> 0.25
+    past_6_days = now - timedelta(days=6)
+    res = calculate_decay(past_6_days.isoformat())
+    print(f"Age 6 days: {res}")
     assert abs(res - 0.25) < 0.01, f"Expected ~0.25, got {res}"
 
-    # Test 4: Fractional day (1 day) -> 0.5^(0.5) = sqrt(0.5) = 0.707
-    past_1_day = now - timedelta(days=1)
-    res = calculate_decay(past_1_day.isoformat())
-    print(f"Age 1 day: {res}")
+    # Test 4: Fractional day (1.5 days) -> 0.5^(1.5/3) = 0.5^0.5 = 0.707
+    past_1_5_days = now - timedelta(days=1.5)
+    res = calculate_decay(past_1_5_days.isoformat())
+    print(f"Age 1.5 days: {res}")
     assert abs(res - 0.707) < 0.01, f"Expected ~0.707, got {res}"
 
-    print("✓ All decay tests passed")
+    print("✓ All decay tests passed (3-day half-life)")
 
 if __name__ == "__main__":
     test_decay()
