@@ -1,0 +1,39 @@
+[Unit]
+Description=Outlines.dev Constrained Generation Service
+Documentation=https://github.com/outlines-ai/outlines
+# Note: network-online.target not available in user systemd
+# Optional: Uncomment if ollama.service exists on apollo
+# After=ollama.service
+
+[Service]
+Type=simple
+# User=jay  (commented out: user systemd services run as current user automatically)
+WorkingDirectory=/home/jay
+
+# Python service startup (direct system python with explicit venv path in code)
+ExecStart=/usr/bin/python3 /home/jay/scripts/outlines-server.py
+
+# Restart policy
+Restart=always
+RestartSec=5s
+TimeoutStartSec=30s
+
+# Logging
+StandardOutput=append:/home/jay/logs/outlines-server.log
+StandardError=append:/home/jay/logs/outlines-server.log
+
+# Resource limits
+LimitNOFILE=65536
+MemoryMax=2G
+
+# Signal handling
+KillMode=mixed
+KillSignal=SIGTERM
+TimeoutStopSec=10s
+
+# Environment
+Environment="PYTHONUNBUFFERED=1"
+Environment="PYTHONDONTWRITEBYTECODE=1"
+
+[Install]
+WantedBy=default.target
