@@ -50,3 +50,6 @@ data/downloads/
 .archives/yeast-backup* 
 .claude/            
 scripts/thoughts_and_responses/ 
+scripts/prompts/
+scripts/thoughts_archive/
+

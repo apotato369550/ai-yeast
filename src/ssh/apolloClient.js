@@ -85,7 +85,7 @@ class ApolloClient {
       };
 
       const result = await Promise.race([
-        ssh.execCommand(`node ~/yeast-agent.js`, { stdin: JSON.stringify(payload) }),
+        ssh.execCommand(`cd ~ && node ./src/agent/yeast-agent.js`, { stdin: JSON.stringify(payload) }),
         new Promise((_, reject) => setTimeout(() => reject(new Error('SSH timeout')), config.SSH_TIMEOUT_MS)),
       ]);
 

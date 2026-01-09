@@ -78,16 +78,22 @@ if [ "${NODE_VERSION}" = "NOT_INSTALLED" ]; then
 fi
 log_success "Node.js ${NODE_VERSION} found on apollo"
 
-# Step 3: Deploy agent script
-log_info "Deploying yeast-agent.js..."
-if scp "${PROJECT_ROOT}/src/agent/yeast-agent.js" "${APOLLO_ADDR}:~/" >/dev/null 2>&1; then
-  log_success "yeast-agent.js deployed"
-  ssh "${APOLLO_ADDR}" "chmod +x ~/yeast-agent.js" >/dev/null
-  ssh "${APOLLO_ADDR}" "mkdir -p ~/prompts" >/dev/null
-  scp -r "${PROJECT_ROOT}/src/agent/prompts/"* "${APOLLO_ADDR}:~/prompts/" >/dev/null
+# Step 3: Deploy src directory (agent + all modules)
+log_info "Deploying src/ directory with all modules..."
+if scp -r "${PROJECT_ROOT}/src/" "${APOLLO_ADDR}:~/" >/dev/null 2>&1; then
+  log_success "src/ directory deployed with all modules"
+  ssh "${APOLLO_ADDR}" "chmod +x ~/src/agent/yeast-agent.js" >/dev/null
 else
-  log_error "Failed to deploy yeast-agent.js"
+  log_error "Failed to deploy src/ directory"
   exit 1
+fi
+
+# Step 3b: Deploy plans directory (schemas for Outlines)
+log_info "Deploying plans/ directory with schemas..."
+if scp -r "${PROJECT_ROOT}/plans/" "${APOLLO_ADDR}:~/" >/dev/null 2>&1; then
+  log_success "plans/ directory deployed (Outlines schema available)"
+else
+  log_warn "plans/ directory deployment failed (Outlines may fall back to unstructured mode)"
 fi
 
 # Step 4: Deploy package files (for dependency management)
@@ -154,7 +160,7 @@ fi
 
 # Step 10: Verify deployed agent works
 log_info "Testing deployed agent..."
-TEST_RESULT=$(ssh "${APOLLO_ADDR}" "echo '{\"command\":\"test\",\"input\":\"hello\"}' | timeout 5 node ~/yeast-agent.js 2>&1 || echo 'FAILED'" || echo "FAILED")
+TEST_RESULT=$(ssh "${APOLLO_ADDR}" "cd ~ && echo '{\"command\":\"test\",\"input\":\"hello\"}' | timeout 5 node ./src/agent/yeast-agent.js 2>&1 || echo 'FAILED'" || echo "FAILED")
 
 if echo "${TEST_RESULT}" | grep -q "FAILED"; then
   log_warn "Agent test returned an error (this may be normal if testing invalid input)"

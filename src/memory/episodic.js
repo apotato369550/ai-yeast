@@ -15,7 +15,7 @@ export async function loadEpisodicWithDecay() {
   return applyDecayToEpisodic(memories);
 }
 
-export async function addEpisodic(content, source = 'interaction', confidence = 0.9) {
+export async function addEpisodic(content, source = 'interaction', confidence = 0.9, metadata = {}) {
   const memories = await loadEpisodic();
   const newMemory = {
     id: randomUUID().slice(0, 8),
@@ -24,6 +24,7 @@ export async function addEpisodic(content, source = 'interaction', confidence = 
     source,
     confidence,
     access_count: 0,
+    ...metadata,
   };
   memories.push(newMemory);
 
