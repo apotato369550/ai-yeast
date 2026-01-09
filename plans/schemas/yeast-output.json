@@ -1,0 +1,105 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://ai-yeast.local/schemas/yeast-output.json",
+  "title": "Yeast Agent Structured Output Schema",
+  "description": "Defines the required structure for all Yeast agent responses when using Outlines.dev constrained decoding. Ensures consistent, parseable output with all 5 required fields.",
+  "type": "object",
+  "properties": {
+    "complexity_score": {
+      "type": "number",
+      "title": "Complexity Score",
+      "description": "Numeric assessment of the input query complexity (0.0 = simple, 1.0 = highly complex)",
+      "minimum": 0.0,
+      "maximum": 1.0,
+      "examples": [0.3, 0.65, 0.95]
+    },
+    "thinking_blocks": {
+      "type": "array",
+      "title": "Thinking Blocks",
+      "description": "Array of structured reasoning steps. Each block represents a layer of cognitive depth from surface-level (depth=1) to abstract reasoning (depth=3). Maximum 3 blocks per response.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "depth": {
+            "type": "integer",
+            "title": "Thinking Depth Level",
+            "description": "1=surface analysis, 2=intermediate reasoning, 3=abstract/meta reasoning",
+            "minimum": 1,
+            "maximum": 3
+          },
+          "content": {
+            "type": "string",
+            "title": "Thinking Content",
+            "description": "The reasoning text for this depth level",
+            "minLength": 10
+          }
+        },
+        "required": ["depth", "content"],
+        "additionalProperties": false
+      },
+      "maxItems": 3,
+      "minItems": 0
+    },
+    "realizations": {
+      "type": "array",
+      "title": "Key Realizations",
+      "description": "Array of key insights, discoveries, or memorable conclusions extracted from the reasoning process. Each realization should be a standalone, meaningful observation.",
+      "items": {
+        "type": "string",
+        "minLength": 5,
+        "description": "A single realization or insight"
+      },
+      "minItems": 0
+    },
+    "response": {
+      "type": "string",
+      "title": "Agent Response",
+      "description": "The main conversational response to the user query. Should be clear, coherent, and standalone without thinking blocks or metadata.",
+      "minLength": 10
+    },
+    "saliency_score": {
+      "type": "number",
+      "title": "Saliency Score",
+      "description": "Measure of how important/memorable this interaction is for long-term memory consolidation (0.0 = noise/forgettable, 1.0 = critical/highly consolidatable)",
+      "minimum": 0.0,
+      "maximum": 1.0,
+      "examples": [0.1, 0.5, 0.9]
+    }
+  },
+  "required": [
+    "complexity_score",
+    "thinking_blocks",
+    "realizations",
+    "response",
+    "saliency_score"
+  ],
+  "additionalProperties": false,
+  "examples": [
+    {
+      "complexity_score": 0.45,
+      "thinking_blocks": [
+        {
+          "depth": 1,
+          "content": "The user is asking about memory systems. This is a straightforward question about AI cognition."
+        },
+        {
+          "depth": 2,
+          "content": "Memory systems need to balance retention of important information with pruning of noise. Adaptive decay based on access frequency helps achieve this."
+        }
+      ],
+      "realizations": [
+        "Frequency-based memory decay is more effective than pure time-based decay for maintaining useful knowledge",
+        "Access patterns reveal what information the system actually values versus what is just stored"
+      ],
+      "response": "Memory systems work best when they combine time-based aging with utility metrics. By tracking how often each memory is accessed and allowing frequently-used memories to stay fresh, the system naturally preserves what matters while discarding noise. This is especially effective for learning systems where usage patterns correlate with actual value.",
+      "saliency_score": 0.72
+    },
+    {
+      "complexity_score": 0.15,
+      "thinking_blocks": [],
+      "realizations": [],
+      "response": "This is a simple greeting. I'm ready to assist with your questions about my memory systems, identity, or reasoning process.",
+      "saliency_score": 0.05
+    }
+  ]
+}
