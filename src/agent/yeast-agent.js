@@ -5,6 +5,7 @@ import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
+import realizationExtractor from '../thinking/realizationExtractor.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -14,7 +15,62 @@ const OLLAMA_EMBED_API = 'http://localhost:11434/api/embed';
 const MISTRAL_MODEL = 'mistral';
 const EMBED_MODEL = 'nomic-embed-text';
 
-async function callMistral(messages, thinking = false, thinkingBudget = 1500) {
+// Load schema for Outlines.dev structured output
+function loadOutputSchema() {
+  const schemaPath = join(__dirname, '..', '..', 'plans', 'schemas', 'yeast-output.json');
+  if (existsSync(schemaPath)) {
+    try {
+      const schema = JSON.parse(readFileSync(schemaPath, 'utf8'));
+      return schema;
+    } catch (error) {
+      console.warn(`[YEAST-AGENT] Failed to load output schema: ${error.message}`);
+      return null;
+    }
+  }
+  return null;
+}
+
+async function callMistralStructured(prompt, outlineSchema, temperature = 0.7) {
+  const outlinesApi = process.env.OUTLINES_API || 'http://localhost:6789/chat';
+
+  try {
+    const response = await axios.post(outlinesApi, {
+      prompt,
+      schema: outlineSchema,
+      temperature,
+    }, { timeout: 45000 });
+
+    if (response.data && response.data.output) {
+      return {
+        success: true,
+        content: response.data.output,
+        structured: true,
+      };
+    }
+
+    return {
+      success: false,
+      error: 'No output in Outlines response',
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: error.message,
+    };
+  }
+}
+
+async function callMistral(messages, thinking = false, thinkingBudget = 1500, useOutlines = false, outlineSchema = null) {
+  // If Outlines is enabled and schema available, use structured output
+  if (useOutlines && outlineSchema) {
+    const prompt = messages
+      .map((m) => `${m.role.toUpperCase()}:\n${m.content}`)
+      .join('\n\n');
+
+    return callMistralStructured(prompt, outlineSchema, 0.7);
+  }
+
+  // Fall back to standard Ollama Mistral API
   try {
     const response = await axios.post(MISTRAL_API, {
       model: MISTRAL_MODEL,
@@ -26,6 +82,7 @@ async function callMistral(messages, thinking = false, thinkingBudget = 1500) {
     return {
       success: true,
       content: response.data.message.content,
+      structured: false,
     };
   } catch (error) {
     return {
@@ -70,8 +127,9 @@ Format: [SALIENCY: score]
   }
 
   if (thinkingEnabled) {
-    systemPrompt += `You have a thinking budget of ${thinkingBudget} tokens.\n`;
-    systemPrompt += 'Use <thinking>...</thinking> tags to reason before answering.\n';
+    systemPrompt += `You have ${3} thinking blocks per query.\n`;
+    systemPrompt += 'Format: <thinking depth="1-3">reasoning</thinking>\n';
+    systemPrompt += 'After thinking, extract: <realizations>- insight</realizations>\n';
   }
 
   if (ragDocs && ragDocs.length > 0) {
@@ -86,7 +144,11 @@ Format: [SALIENCY: score]
     { role: 'user', content: userInput },
   ];
 
-  const result = await callMistral(messages, thinkingEnabled, thinkingBudget);
+  // Check if Outlines is enabled
+  const outlinesEnabled = process.env.OUTLINES_ENABLED === 'true';
+  const outlineSchema = outlinesEnabled ? loadOutputSchema() : null;
+
+  const result = await callMistral(messages, thinkingEnabled, thinkingBudget, outlinesEnabled, outlineSchema);
 
   if (!result.success) {
     return {
@@ -97,22 +159,94 @@ Format: [SALIENCY: score]
     };
   }
 
-  const thinkingMatch = result.content.match(/<thinking>([\s\S]*?)<\/thinking>/);
-  const thinking = thinkingMatch ? thinkingMatch[1].trim() : null;
-  let response = result.content.replace(/<thinking>[\s\S]*?<\/thinking>\n*/g, '').trim();
+  let thinking_blocks;
+  let realizations;
+  let thinking;
+  let response;
+  let saliency;
+  let realizationsStored = 0;
 
-  const saliencyMatch = response.match(/\[SALIENCY: ([\d.]+)\]/);
-  const saliency = saliencyMatch ? parseFloat(saliencyMatch[1]) : 0.5;
-  response = response.replace(/\[SALIENCY: [\d.]+\]/g, '').trim();
+  // Handle structured output from Outlines
+  if (result.structured && typeof result.content === 'object') {
+    try {
+      const structured = result.content;
+
+      // Validate required fields
+      if (!structured.response || !('complexity_score' in structured) || !('saliency_score' in structured) || !Array.isArray(structured.thinking_blocks) || !Array.isArray(structured.realizations)) {
+        throw new Error('Structured output missing required fields');
+      }
+
+      response = structured.response;
+      saliency = structured.saliency_score;
+      thinking_blocks = structured.thinking_blocks || [];
+      realizations = structured.realizations || [];
+      thinking = thinking_blocks.length > 0 ? thinking_blocks.map((b) => b.content).join('\n\n') : null;
+
+      // Process realizations for storage
+      if (realizations.length > 0 && thinking_blocks.length > 0) {
+        const maxDepth = Math.max(...thinking_blocks.map((b) => b.depth));
+        const minDepthToRealize = parseInt(process.env.THINKING_MIN_DEPTH_TO_REALIZE || '2');
+        if (maxDepth >= minDepthToRealize) {
+          realizationsStored = realizations.length;
+        }
+      }
+    } catch (error) {
+      console.warn(`[YEAST-AGENT] Structured output parsing failed, falling back to regex: ${error.message}`);
+      // Fall through to regex parsing
+      result.structured = false;
+    }
+  }
+
+  // Handle unstructured output (fallback)
+  if (!result.structured) {
+    // Extract thinking blocks and realizations
+    const extracted = realizationExtractor.extractThinkingAndRealizations(result.content);
+    thinking_blocks = extracted.thinking_blocks;
+    realizations = extracted.realizations;
+
+    // Get legacy thinking (for backward compatibility)
+    const thinkingMatch = result.content.match(/<thinking[^>]*>([\s\S]*?)<\/thinking>/);
+    thinking = thinkingMatch ? thinkingMatch[1].trim() : null;
+
+    // Remove thinking and realization blocks from response
+    response = result.content
+      .replace(/<thinking[^>]*>[\s\S]*?<\/thinking>\n*/g, '')
+      .replace(/<realizations>[\s\S]*?<\/realizations>\n*/g, '')
+      .trim();
+
+    const saliencyMatch = response.match(/\[SALIENCY: ([\d.]+)\]/);
+    saliency = saliencyMatch ? parseFloat(saliencyMatch[1]) : 0.5;
+    response = response
+      .replace(/\[COMPLEXITY: [\d.]+\]\n*/g, '')
+      .replace(/\[SALIENCY: [\d.]+\]/g, '')
+      .trim();
+
+    // Validate thinking blocks
+    const validation = realizationExtractor.validateThinkingBlocks(thinking_blocks);
+    if (!validation.valid) {
+      console.warn(`[YEAST-AGENT] ${validation.warning}`);
+    }
+
+    // Process realizations for storage
+    if (realizations.length > 0 && thinking_blocks.length > 0) {
+      const maxDepth = Math.max(...thinking_blocks.map((b) => b.depth));
+      const minDepthToRealize = parseInt(process.env.THINKING_MIN_DEPTH_TO_REALIZE || '2');
+      if (maxDepth >= minDepthToRealize) {
+        realizationsStored = realizations.length;
+      }
+    }
+  }
 
   return {
     success: true,
     response,
     thinking,
+    realizations,
     saliency,
     memory_updates: {
       episodic_added: 1,
       semantic_added: 0,
+      realizations_stored: realizationsStored,
     },
     timestamp: new Date().toISOString(),
   };
