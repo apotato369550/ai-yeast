@@ -32,25 +32,69 @@ The project has come a long way from its humble beginnings:
 
 ## 🏁 Quick Start
 
-Make sure you have Node.js 18+, SSH access to your `apollo.local` (or wherever your Ollama lives), and some curiosity.
+### Prerequisites
+
+Before you begin, make sure you have:
+
+- **Node.js 18+**: Required for the CLI
+- **SSH access to apollo.local**: The system runs its LLM remotely. Make sure you can SSH there.
+- **Mistral 7B via Ollama**: Running on apollo.local (via `ollama run mistral:7b`)
+- **.env configured**: SSH credentials and paths (we'll help you set this up)
+
+### Getting Started
 
 ```bash
-# 1. Grab the bits
+# 1. Install dependencies
 npm install
 
-# 2. Tell it where Apollo is
+# 2. Copy and configure the environment file
 cp .env.example .env
-# (Populate your .env with your SSH secrets)
+# Edit .env with your SSH host, user, and key path
 
-# 3. Let it ferment!
+# 3. Start the REPL
 npm start
 ```
 
-### REPL Commands (The Good Stuff)
-- `/thinking on` - Enable that sweet, sweet inner monologue.
-- `/rag on` - Start searching your documents.
-- `/inspect` - Peak under the hood at the memory status.
-- `/consolidate` - Move those memories from "recent" to "permanent record."
+After running `npm start`, you'll see an interactive prompt. **Yeast will remember you from conversation to conversation.**
+
+### First Steps: A Simple Dialogue
+
+Try this when you start:
+
+```
+$ npm start
+🍞 Yeast: Hello! What would you like to explore today?
+> I'm interested in how you remember things.
+🍞 Yeast: That's a good question! I store memories in three ways...
+> How much do you currently remember about me?
+🍞 Yeast: [Pulls from episodic and semantic memory to answer...]
+```
+
+Then try running `/inspect` to see how Yeast actually stores and scores those memories. Watch how follow-up questions draw from the same memory pool—that's adaptive consolidation in action.
+
+### REPL Commands: Understanding the Interface
+
+Once in the Yeast prompt, these commands unlock different capabilities:
+
+- **`/thinking on|off`** - Enable "inner monologue" mode. Yeast will show you its reasoning process (`<thinking>` blocks) before answering. Useful for complex questions where you want to see the work.
+
+- **`/rag on|off`** - Activate Retrieval-Augmented Generation. Feed Yeast your PDFs or Markdown documents, and it will use semantic search to ground answers in actual external knowledge (not just patterns it learned during training).
+
+- **`/inspect`** - Peek under the hood. Shows the current state: episodic memory count, semantic facts consolidation, how much memories have decayed, access statistics, and internal identity state. This is how you "watch" Yeast think about itself.
+
+- **`/consolidate`** - Manually trigger memory consolidation. Recent episodic memories (raw chat history) are analyzed and distilled into lasting semantic facts (generalizable knowledge). Useful after long learning sessions to see what stuck.
+
+- **`/documents`** - List currently available RAG documents and their ingestion status.
+
+- **`/audit`** - View the reflection log—see which outputs passed the three safety gates and which were rejected.
+
+- **`/exit`** - Close the session (memories are automatically saved to apollo).
+
+### Troubleshooting First-Time Issues
+
+- **"SSH connection failed"**: Verify apollo.local is reachable. Check that your SSH key is in `~/.homelab_keys/id_rsa` (or update the path in `.env`).
+- **"Ollama not running"**: SSH to apollo.local and run `ollama run mistral:7b` to start it, then try again.
+- **"npm start times out"**: Increase `SSH_TIMEOUT_MS` in `.env` (default is 30 seconds).
 
 ## ⚠️ Disclaimer
 
@@ -66,19 +110,36 @@ We view the AI's internal dynamics through four lenses:
 
 In Phase 5, memory becomes **adaptive**. Instead of simple time-based decay, memories are now judged by their **utility**. The more a memory is accessed and used, the more "consolidated" it becomes, exerting a stronger influence on the model. Memories that are rarely touched are allowed to decay naturally, letting the system "discern" what is truly worth keeping based on the current context.
 
-## 🧪 Batch Fermentation (The Fermenter)
+## 🧪 Next Steps: Advanced Exploration
 
-Phase 5 introduces the **Fermenter**, a batch processing tool for feeding large amounts of "starches" (prompts) to Yeast.
+### Batch Fermentation (The Fermenter)
 
-### Usage
-1.  **Prepare Starches**: Create a `.txt` or `.md` file in `scripts/prompts/` (e.g., `experiment_v1.md`).
-2.  **Add Prompts**: Put one prompt per line. The Fermenter will ignore lines starting with `#` (Markdown headers).
-3.  **Run the Fermenter**:
-    - **All files**: `node scripts/fermenter.js`
-    - **Specific file**: `node scripts/fermenter.js experiment_v1.md`
-4.  **Harvest Results**: Full outputs and "thoughts" are saved as JSON in `scripts/thoughts_and_responses/`.
+Ready to feed Yeast data at scale? Phase 5 introduces the **Fermenter**, a batch processing tool for feeding large amounts of "starches" (prompts) to Yeast in one go.
+
+**Why?** Test how Yeast consolidates patterns across many diverse inputs. Watch how it builds semantic knowledge from repeated exposure. Explore emergent behaviors.
+
+#### Usage
+
+1. **Prepare Starches**: Create a `.txt` or `.md` file in `scripts/prompts/` (e.g., `experiment_v1.md`).
+2. **Add Prompts**: Put one prompt per line. The Fermenter ignores lines starting with `#` (Markdown headers).
+3. **Run the Fermenter**:
+   ```bash
+   # Process all prompt files
+   node scripts/fermenter.js
+
+   # Or process a specific file
+   node scripts/fermenter.js experiment_v1.md
+   ```
+4. **Harvest Results**: Full outputs and reasoning blocks are saved as JSON in `scripts/thoughts_and_responses/`. Inspect them to see how Yeast's "thinking" evolves across the batch.
 
 The Fermenter runs in headless mode with `--no-proposals` by default to keep the memory clean of meta-update suggestions while processing data.
+
+### Other Commands
+
+- **Interactive mode**: `npm start` for the full REPL experience
+- **Headless one-shot**: `npm start -- -p "Your question here"` for scripting
+- **With extended thinking**: `npm start -- -p "Your question" --thinking` to see the reasoning blocks
+- **Development mode**: `npm run dev` for file watching during development
 
 ---
 
