@@ -46,10 +46,11 @@ Thumbs.db
 
 # Project-specific
 *.log
-data/downloads/      
+data/    
 .archives/yeast-backup* 
 .claude/            
 scripts/thoughts_and_responses/ 
 scripts/prompts/
 scripts/thoughts_archive/
+scripts/memory_snapshots/
 
