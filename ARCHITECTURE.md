@@ -952,3 +952,363 @@ When modifying decay or access tracking:
 ---
 
 **Note**: This file documents system architecture. For agent behavioral rules and constraints, see CLAUDE.md.
+
+---
+
+## Apollo.local Infrastructure (Phase 5)
+
+**Purpose**: Remote host running Ollama (Mistral 7B, nomic-embed-text) and persistent yeast-data stores. Accessed via SSH from local development machine (orion).
+
+### Executable Inventory
+
+#### ~/yeast-agent (Python v0.3.0)
+- **Type**: Python 3 script (ASCII text executable)
+- **Size**: 37,694 bytes (1,083 lines)
+- **Permissions**: -rwx--x--x
+- **Modified**: 2026-01-06 11:10:24 UTC
+- **Phase**: v0.3.0 (Soft Autonomy) - legacy implementation retained for reference
+- **Purpose**: Original proto-consciousness agent with proposal queue (pre-extended thinking)
+- **Status**: SUPERSEDED by yeast-agent.js (Node.js Phase 5)
+
+#### ~/yeast-agent.js (Node.js Phase 5 - Active)
+- **Type**: Node.js script executable (ASCII text)
+- **Size**: 7,170 bytes (238 lines)
+- **Permissions**: -rwxrwxr-x
+- **Modified**: 2026-01-09 05:44:06 UTC
+- **Purpose**: Entry point wrapper; imports core Agent from src/agent/yeast-agent.js
+- **Status**: PRIMARY EXECUTABLE (used by npm start)
+- **Note**: Minimal wrapper; actual logic in src/
+
+#### ~/src/cli/yeast.js (Main CLI Entry)
+- **Type**: Node.js script
+- **Size**: (embedded in src/)
+- **Permissions**: -rwxrwxr-x
+- **Purpose**: Commander.js CLI dispatcher (REPL mode, headless mode, inspect)
+- **Exports**: startREPL(), config loading, memory initialization
+- **Called By**: npm start, yeast-agent.js
+
+### Source Code Modules (~/src/)
+
+**Module Structure** (19 files total):
+
+#### Memory Tier Management
+- **src/memory/decay.js**: Utility-based decay formula
+  - `calculateDecay(createdAt, accesses, halfLifeDays)`: Main decay computation
+  - Effective age = ageDays / max(1, accesses) → adaptive frequency weighting
+  - `calculateRelevanceWeight(memory)`: decay × confidence
+  - `applyDecayToEpisodic(memories)`: Batch decay scoring
+  - `sortByRelevance(memories)`: Rank by weight for pruning
+  - **Config Used**: MEMORY_DECAY_HALF_LIFE_DAYS (default: 7 days)
+
+- **src/memory/episodic.js**: Raw interaction memories
+  - `loadEpisodic()`: Fetch from episodic/raw.json
+  - `loadEpisodicWithDecay()`: Apply decay scores
+  - `addEpisodic(content, source, confidence, metadata)`: Create timestamp + uuid
+  - MAX_EPISODIC_MEMORIES = 50 (pruning threshold)
+  - Fields: id, timestamp, content, source, confidence, access_count, metadata
+  - **Decay Tracking**: Each retrieve increments access_count, updates last_accessed_at
+
+- **src/memory/semantic.js**: Consolidated facts (distilled from episodic + saliency)
+  - `loadSemantic()`: Fetch from semantic/distilled.json
+  - `addSemantic(fact, source, confidence)`: Consolidate long-term knowledge
+  - Smaller memory footprint than episodic (facts vs. raw interactions)
+
+- **src/memory/selfModel.js**: Agent identity + active drives
+  - `loadSelfModel()`: Fetch from self_model/current.json
+  - `saveSelfModel(model)`: Update identity, active_drives, constraints
+  - Tracks "who I am" + current objectives
+  - **History**: self_model/history.json appends old models (versioning)
+
+- **src/memory/migration.js**: Version upgrade utilities
+  - Handles schema migration as yeast evolves
+  - Ensures backward compatibility
+
+#### Extended Thinking (Phase 5)
+- **src/thinking/realizationExtractor.js**: Parse <thinking> and <realizations> tags
+  - `extractThinkingAndRealizations(content)`: Regex matching for structured thinking
+  - Returns: thinking_blocks (depth, content), realizations (list)
+  - `validateThinkingBlocks(thinkingBlocks)`: Enforce THINKING_BLOCKS_PER_QUERY limit (default: 3)
+  - **Tag Format**: `<thinking depth="N">...</thinking>`, `<realizations>...</realizations>`
+
+- **src/thinking/budgetManager.js**: Token budget tracking
+  - Enforces thinking block counts per query
+  - Prevents runaway computation
+
+- **src/thinking/promptBuilder.js**: Builds prompts with thinking instructions
+  - Injects extended thinking directive when enabled
+
+#### RAG (Retrieval-Augmented Generation)
+- **src/rag/index.js**: Main RAG interface
+- **src/rag/embeddings.js**: Vector embeddings via Ollama nomic-embed-text
+- **src/rag/retrieval.js**: Semantic search (cosine similarity)
+- **src/rag/ingestion.js**: Load documents from ~/yeast-documents/ (RAG_DOCUMENTS_PATH)
+  - **Config**: RAG_TOP_K = 3 (default top-K results)
+  - **Via SSH**: EMBEDDING_VIA_SSH=true uses apolloClient for remote embedding
+
+#### SSH Communication
+- **src/ssh/apolloClient.js**: Node-SSH pool for remote commands
+  - Connection pooling (max 3 simultaneous connections)
+  - Retry logic (5 attempts, exponential backoff: 100ms, 200ms, 400ms, 800ms, 1600ms)
+  - SSH key: ~/.homelab_keys/id_rsa (shared with homelab-manager)
+  - Timeout: 30000ms default (configurable via SSH_TIMEOUT_MS)
+  - **Note**: ~/.homelab_keys NOT present on apollo.local (key lives on orion/local machine)
+
+#### Core Infrastructure
+- **src/config.js**: Environment + defaults loader
+  - Reads .env file if exists
+  - Fallback defaults for all config variables
+  - **Key Defaults**:
+    - APOLLO_HOST: apollo.local
+    - APOLLO_USER: jay
+    - APOLLO_PORT: 22
+    - SSH_PRIVATE_KEY_PATH: ~/.homelab_keys/id_rsa
+    - EMBEDDING_VIA_SSH: true
+    - THINKING_BLOCKS_PER_QUERY: 3
+    - MEMORY_DECAY_HALF_LIFE_DAYS: 7
+
+- **src/store.js**: JSON persistence layer
+  - `loadJSON(path)`: Parse JSON or return {}
+  - `saveJSON(path, data)`: Write atomically
+  - `getMemoryPaths()`: Return paths to all memory tiers
+  - All data lives in ~/yeast-data/ (on apollo.local)
+
+- **src/agent/yeast-agent.js**: Main agent orchestrator
+  - Coordinates memory access, thinking, RAG
+  - Enforces reflection gates before memory mutations
+
+- **src/cli/repl.js**: Interactive REPL loop
+  - Multi-turn conversation with history
+  - Calls agent.processQuery() per turn
+
+- **src/cli/commands/inspect.js**: Memory diagnostics command
+  - `/inspect` reveals current memory state, decay scores, access counts
+
+### Data Tier (~/yeast-data/)
+
+**Directory Structure** (7 subdirectories):
+
+#### episodic/ (Raw Interactions)
+- **raw.json**: All episodic memories (append-only raw log)
+  - Schema: { memories: [], version: "0.4.0", created_at: "ISO_TIMESTAMP" }
+  - Each memory: { id, timestamp, content, source, confidence, access_count, ...metadata }
+  - Pruned to MAX_EPISODIC_MEMORIES=50 after each update
+
+- **decayed.json**: Scored copy (cached, rebuilt on access)
+  - Same memories with added decay score and relevance_weight fields
+  - Used for sorting/filtering
+
+#### semantic/ (Distilled Knowledge)
+- **distilled.json**: Consolidated facts (lower cardinality than episodic)
+  - Schema: { facts: [], version: "0.4.0" }
+  - Each fact: { text, source, confidence, created_at }
+  - Represents learned abstractions, not specific interactions
+  - Slower decay than episodic (long-term knowledge)
+
+#### self_model/ (Identity)
+- **current.json**: Current self-model state
+  - Schema: { identity, active_drives: [], constraints: [] }
+  - Example identity: "yeast (AI proto-consciousness experiment)"
+  - Updated by agent via saveSelfModel()
+
+- **history.json**: Versioning log
+  - Appends old self-models for historical tracking
+  - Useful for observing how agent self-perception evolves
+
+#### reflection/ (Decision Logs)
+- **audits.json**: Memory mutation audit trail
+  - Records: which memory changed, why, reflection gate results
+  - Schema: { audits: [], version: "0.4.0" }
+  - Enables transparency in memory decisions
+
+- **proposals.json**: Suggested self-modifications (from LLM)
+  - Schema: { proposals: [], version: "0.4.0" }
+  - Semantic, Tension, Maintenance types (Phase 3 concept)
+
+- **forgetting.json**: Memories pruned due to low decay score
+  - Tracks what was discarded and when
+  - Useful for observing memory consolidation
+
+- **rag_queries.json**: History of RAG retrievals
+  - Documents which documents were fetched for which queries
+  - Enables RAG effectiveness analysis
+
+#### rag/ (Vector Database)
+- **Empty in Phase 5**: Placeholder for future vector store
+  - Currently uses inline embeddings (no persistent vector DB)
+  - RAG documents stored in ~/yeast-documents/ (local)
+
+### Configuration
+
+**File: ~/.env** (on apollo.local, visible to npm start)
+```
+APOLLO_HOST=apollo.local
+APOLLO_USER=jay
+APOLLO_PORT=22
+AGENT_PATH=~/yeast-agent
+EMBEDDING_VIA_SSH=true
+OLLAMA_API_URL=
+THINKING_BLOCKS_PER_QUERY=3
+THINKING_MIN_DEPTH_TO_REALIZE=2
+THINKING_STRICT_TAGS=true
+THINKING_MEMORY_ENABLED=true
+THINKING_REALIZATION_SALIENCY_MULT=0.9
+```
+
+**Ollama Integration**:
+- Service: /usr/local/bin/ollama serve (PID 1311, running)
+- API: http://localhost:11434/api/chat (Mistral)
+- Embeddings: http://localhost:11434/api/embed (nomic-embed-text)
+
+### Ollama Models
+
+**Installed**:
+- mistral:7b-instruct (6577803aa9a0, 4.4 GB, 3 days ago)
+  - Model for extended thinking queries
+  - Temperature: 0.7 (default, configurable)
+  - Supports <thinking> tag parsing in realizationExtractor.js
+
+- nomic-embed-text:latest (0a109f422b47, 274 MB, 3 days ago)
+  - Embedding model for RAG vector search
+  - Used by src/rag/embeddings.js
+
+- sysdawg:latest (db1a6d8d0d47, 4.4 GB, 6 days ago)
+  - Legacy SRE model (Phase 1 of mistral-sysadmin-script)
+  - Not used by yeast
+
+- mistral:latest (6577803aa9a0, 4.4 GB, 2 months ago)
+  - Alias for mistral:7b-instruct
+
+### Dependencies (package.json)
+
+```json
+{
+  "name": "yeast",
+  "version": "0.4.0",
+  "main": "src/cli/yeast.js",
+  "bin": { "yeast": "src/cli/yeast.js" },
+  "type": "module",
+  "scripts": {
+    "start": "node src/cli/yeast.js",
+    "test": "jest",
+    "dev": "node --watch src/cli/yeast.js"
+  },
+  "dependencies": {
+    "axios": "^1.6.0",         (HTTP client for Ollama API)
+    "chalk": "^5.3.0",         (CLI color output)
+    "commander": "^11.0.0",    (CLI argument parsing)
+    "dotenv": "^16.3.0",       (Environment loading)
+    "gray-matter": "^4.0.3",   (YAML frontmatter parsing)
+    "node-ssh": "^13.1.0",     (SSH client pool)
+    "pdf-parse": "^1.1.1"      (RAG: extract text from PDFs)
+  },
+  "engines": { "node": ">=18.0.0" }
+}
+```
+
+### Scripts (~/scripts/)
+
+- **run-outlines.sh**: Wrapper for outlines-server.py
+  - Launches Python server on localhost:8000
+  - Used for structured generation (JSON schema compliance)
+
+- **outlines-server.py**: Outlines.dev API server
+  - 377 lines Python
+  - Provides /generate endpoint for constrained JSON output
+  - Used in batch fermentation (scripts/fermenter.js) for schema validation
+
+### Logging
+
+- **~/logs/outlines-server.log**: Structured generation output log
+  - 24,529 bytes, continuously appended
+  - Tracks schema violations, generation metrics
+
+### SSH Key Configuration
+
+**On apollo.local**: No ~/.homelab_keys/ directory
+- Reason: SSH keys stored on orion/local machine (client side)
+- Connection initiated from orion via ~/.homelab_keys/id_rsa (shared with homelab-manager)
+- apollo.local authorized_keys must include orion's public key
+
+**SSH Command Pattern** (from apolloClient.js):
+```
+ssh -i ~/.homelab_keys/id_rsa -p 22 jay@apollo.local "command"
+```
+
+### Phase 5 Architectural Highlights
+
+1. **Utility-Based Decay**: access_count directly reduces effective age
+   - Formula: effectiveAge = ageDays / max(1, accesses)
+   - Frequently accessed memories persist far longer than time alone suggests
+
+2. **Extended Thinking**: Mistral 7B supports <thinking depth="N"> blocks
+   - Realizations extracted and scored for memory consolidation
+   - THINKING_REALIZATION_SALIENCY_MULT=0.9 weights realization importance
+
+3. **Reflection Gates**: Three gates guard all memory mutations
+   - Coherence: Does new memory contradict existing facts?
+   - Contradiction: Can agent resolve conflicts?
+   - Safety: Is memory safe to store (no harmful propositions)?
+   - Audited in reflection/audits.json
+
+4. **Batch Fermentation**: scripts/fermenter.js processes 100+ prompts via npm start -- --no-proposals
+   - No-proposals mode suppresses LLM meta-suggestions (meta-feedback only)
+   - Outputs to scripts/thoughts_and_responses/ (Phase 5 output directory)
+
+5. **Access Tracking**: Every memory retrieval updates last_accessed_at and increments access_count
+   - Enables true utility-based prioritization
+   - Foundation for Phase 6 self-organizing memory
+
+### Known Constraints & Gotchas
+
+- **No Persistent Vector DB**: RAG embeddings computed on-demand (nomic-embed-text)
+  - Documents live in ~/yeast-documents/ (local machine, ingested during session)
+  - Future optimization: Persist embeddings for faster retrieval
+
+- **SSH Pool Contention**: apolloClient max 3 connections with backoff
+  - If many parallel queries, may hit "No SSH connections available" error
+  - Increase maxConnections in src/ssh/apolloClient.js if needed
+
+- **No Local SSH Keys on apollo.local**: SSH initiated from orion
+  - apollo.local is "dumb" (no ability to initiate remote connections)
+  - Phase 6 may add local SSH key for autonomous multi-host operations
+
+- **Episodic Memory Cap**: MAX_EPISODIC_MEMORIES = 50
+  - Old, low-decay memories automatically pruned (tracked in reflection/forgetting.json)
+  - Semantic tier has no explicit cap (consolidation-driven pruning only)
+
+- **Thinking Depth Limit**: THINKING_BLOCKS_PER_QUERY = 3
+  - Hard limit enforced by realizationExtractor.js validateThinkingBlocks()
+  - Prevents runaway thinking chains
+
+### Deployment & Testing
+
+**Commands**:
+```bash
+npm start                      # Interactive REPL
+npm start -- -p "query"        # Headless single query
+npm start -- --no-proposals    # Batch fermentation mode
+npm start -- -p "/inspect"     # Memory diagnostic snapshot
+```
+
+**SSH Tunnel** (for local development):
+```bash
+ssh -L 11434:localhost:11434 jay@apollo.local  # Forward Ollama API locally
+```
+
+**Memory Inspection** (on apollo.local):
+```bash
+ssh apollo.local "python3 -m json.tool ~/yeast-data/episodic/raw.json | head -20"
+ssh apollo.local "ls -la ~/yeast-data/reflection/"
+```
+
+### Integration with Homelab Infrastructure
+
+- Uses same SSH key infrastructure as homelab-manager (~/.homelab_keys/id_rsa)
+- apollo.local doubles as Ollama service provider for mistral-sysadmin-script Phase 3+
+- yeast-data persists across reboots (supervised recovery in systemd unit, if configured)
+
+---
+
+**Last Updated**: 2026-01-11 (Phase 5: Adaptive Memory Dynamics)
+**Infrastructure Mapper**: Claude Agent (Architecture Tracer)
+**Status**: Complete (all target files mapped, no blockers)
