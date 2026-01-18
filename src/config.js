@@ -39,7 +39,7 @@ const defaults = {
   MEMORY_DECAY_HALF_LIFE_DAYS: '3',
   MEMORY_DIR: '~/yeast-data',
   OUTLINES_ENABLED: 'false',
-  OUTLINES_API: 'http://localhost:6789/chat',
+  OUTLINES_API: 'http://apollo.local:6789/chat',
   LOG_LEVEL: 'info',
 };
 

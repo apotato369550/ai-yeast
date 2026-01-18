@@ -243,6 +243,7 @@ Format: [SALIENCY: score]
     thinking,
     realizations,
     saliency,
+    complexity_score: structured?.complexity_score || 0.5,
     memory_updates: {
       episodic_added: 1,
       semantic_added: 0,

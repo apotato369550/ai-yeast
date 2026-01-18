@@ -18,27 +18,27 @@ const OUTPUT_DIR = './scripts/thoughts_and_responses';
  * Parse output from yeast to extract complexity, saliency, and realizations
  */
 function parseOutput(rawOutput) {
-  const complexityMatch = rawOutput.match(/\[COMPLEXITY:\s*([\d.]+)\]/);
-  const saliencyMatch = rawOutput.match(/\[SALIENCY:\s*([\d.]+)\]/);
+  let complexity_score = null;
+  let saliency_score = null;
+  let realizations = [];
 
-  // Extract realization blocks
-  const realizationRegex = /<realizations>([\s\S]*?)<\/realizations>/g;
-  const realizationMatches = [...rawOutput.matchAll(realizationRegex)];
-
-  const realizations = [];
-  for (const match of realizationMatches) {
-    const bullets = match[1]
-      .split('\n')
-      .map(line => line.trim())
-      .filter(line => line.startsWith('-') || line.startsWith('•'))
-      .map(line => line.replace(/^[-•]\s*/, '').trim())
-      .filter(line => line.length > 0);
-    realizations.push(...bullets);
+  // Try parsing as JSON first (from yeast-agent.js structured output)
+  try {
+    const parsed = JSON.parse(rawOutput);
+    if (parsed.complexity_score !== undefined) complexity_score = parsed.complexity_score;
+    if (parsed.saliency_score !== undefined) saliency_score = parsed.saliency_score;
+    if (Array.isArray(parsed.realizations)) realizations = parsed.realizations;
+  } catch (e) {
+    // Fall back to regex extraction if not valid JSON
+    const complexityMatch = rawOutput.match(/\[COMPLEXITY:\s*([\d.]+)\]/);
+    const saliencyMatch = rawOutput.match(/\[SALIENCY:\s*([\d.]+)\]/);
+    if (complexityMatch) complexity_score = parseFloat(complexityMatch[1]);
+    if (saliencyMatch) saliency_score = parseFloat(saliencyMatch[1]);
   }
 
   return {
-    complexity_score: complexityMatch ? parseFloat(complexityMatch[1]) : null,
-    saliency_score: saliencyMatch ? parseFloat(saliencyMatch[1]) : null,
+    complexity_score: complexity_score,
+    saliency_score: saliency_score,
     realizations_count: realizations.length,
     realizations: realizations,
     raw_output: rawOutput

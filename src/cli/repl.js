@@ -341,6 +341,9 @@ async function sendMessage(userInput) {
   }
 
   console.log(chalk.white(response.response));
+  if (response.complexity_score !== undefined) {
+    console.log(chalk.dim(`[Complexity: ${response.complexity_score.toFixed(2)}]`));
+  }
 
   if (response.realizations && response.realizations.length > 0) {
     console.log(chalk.yellow('\n💡 Realizations:'));

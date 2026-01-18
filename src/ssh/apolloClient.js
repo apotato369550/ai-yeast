@@ -82,6 +82,8 @@ class ApolloClient {
         rag_docs: ragDocs,
         memory_context: memoryContext,
         no_proposals: config.NO_PROPOSALS,
+        outlines_enabled: config.OUTLINES_ENABLED,
+        outlines_api: config.OUTLINES_API,
       };
 
       const result = await Promise.race([

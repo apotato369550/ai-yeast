@@ -47,6 +47,9 @@ program.action(async (options) => {
         process.stdout.write(`\n[Thinking: ${response.thinking.split(/\s+/).length} tokens]\n`);
       }
       console.log(response.response);
+      if (response.complexity_score !== undefined) {
+        process.stdout.write(`[Complexity: ${response.complexity_score.toFixed(2)}]\n`);
+      }
 
       // Reading as Memory (headless)
       await addEpisodic(`User (headless): "${options.prompt}"`, 'observation', response.saliency || 0.5);
